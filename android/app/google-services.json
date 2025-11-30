@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "313802675672",
+    "project_id": "kyrgyztest-app",
+    "storage_bucket": "kyrgyztest-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:313802675672:android:e475fd7d2771156e61cead",
+        "android_client_info": {
+          "package_name": "com.example.kyrgyztestapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAAcBWV8SEitiZSNKFiyVf0qhzACRxy4nU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
