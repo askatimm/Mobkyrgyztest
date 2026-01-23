@@ -1,18 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:easy_localization/easy_localization.dart'; // 👈 1. Импортируем
-import 'home_screen.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'home_screen.dart'; // Убедитесь, что этот импорт правильный
 
 class LanguageSelectionScreen extends StatelessWidget {
   const LanguageSelectionScreen({Key? key}) : super(key: key);
 
-  // 👇 Теперь эта функция асинхронная (async),
-  //    так как смена языка требует времени
   void _selectLanguage(BuildContext context, Locale locale) async {
-    // 👈 2. Используем 'context.setLocale'
-    // Это изменит язык во всем приложении и сохранит выбор
     await context.setLocale(locale);
-
-    // 3. Переходим на главный экран
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (context) => const HomeScreen()),
     );
@@ -20,60 +14,124 @@ class LanguageSelectionScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Используем голубой цвет фона, как на примере
     return Scaffold(
+      backgroundColor: const Color(0xFF40B3D1),
       body: SafeArea(
         child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Image.asset('assets/images/boy_with_flags.png', height: 200),
-                const SizedBox(height: 40),
-
-                // 2. Текст (мы можем даже его перевести!)
-                // Но для этого экрана оставим как есть,
-                // так как пользователь еще не выбрал язык
-                const Text(
-                  'ТИЛДИ ТАНДАҢЫЗ / ВЫБЕРИТЕ ЯЗЫK',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 50),
-
-                ElevatedButton(
-                  // ... ваш стиль
-                  style: ElevatedButton.styleFrom(
-                    foregroundColor: Colors.black,
-                    backgroundColor: const Color.fromARGB(255, 251, 173, 55),
-                    shape: const StadiumBorder(),
-                    minimumSize: const Size(double.infinity, 50),
+          child: SingleChildScrollView(
+            child: Container(
+              // Белая карточка с закругленными углами
+              margin: const EdgeInsets.all(24.0),
+              padding: const EdgeInsets.all(32.0),
+              decoration: BoxDecoration(
+                color: const Color.fromARGB(255, 229, 238, 239),
+                borderRadius: BorderRadius.circular(30.0),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
                   ),
-                  onPressed: () {
-                    // 👇 4. Передаем Locale('ky')
-                    _selectLanguage(context, const Locale('ky'));
-                  },
-                  child: const Text('КЫРГЫЗЧА', style: TextStyle(fontSize: 18)),
-                ),
-                const SizedBox(height: 20),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Заголовок
+                  const Text(
+                    'Выберите язык',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF333333),
+                    ),
+                    textAlign: TextAlign.center,
+                  ).tr(), // .tr() для перевода, если нужно
+                  const SizedBox(height: 10),
+                  // Подсказка
+                  Text(
+                    'Вы можете изменить это позже в настройках',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                    textAlign: TextAlign.center,
+                  ).tr(), // .tr() для перевода, если нужно
+                  const SizedBox(height: 40),
 
-                ElevatedButton(
-                  // ... ваш стиль
-                  style: ElevatedButton.styleFrom(
-                    foregroundColor: Colors.black,
-                    backgroundColor: const Color.fromARGB(255, 241, 246, 168),
-                    shape: const StadiumBorder(),
-                    minimumSize: const Size(double.infinity, 50),
+                  // Кнопка для Кыргызского языка
+                  _buildLanguageButton(
+                    context,
+                    languageName: 'Кыргызча',
+
+                    flagAsset: 'assets/images/flag_ky.png', 
+                    locale: const Locale('ky'),
                   ),
-                  onPressed: () {
-                    // 👇 5. Передаем Locale('ru')
-                    _selectLanguage(context, const Locale('ru'));
-                  },
-                  child: const Text('РУССКИЙ', style: TextStyle(fontSize: 18)),
-                ),
-              ],
+                  const SizedBox(height: 20),
+
+                  // Кнопка для Русского языка
+                  _buildLanguageButton(
+                    context,
+                    languageName: 'Русский',
+                    flagAsset: 'assets/images/flag_ru.png',
+                    locale: const Locale('ru'),
+                  ),
+                ],
+              ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  // Метод для создания стилизованной кнопки выбора языка
+  Widget _buildLanguageButton(
+    BuildContext context, {
+    required String languageName,
+    required String flagAsset,
+    required Locale locale,
+  }) {
+    return InkWell(
+      onTap: () {
+        _selectLanguage(context, locale);
+      },
+      borderRadius: BorderRadius.circular(30.0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(30.0),
+          border: Border.all(color: Colors.grey.shade200, width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.2),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // Круглый флаг
+            CircleAvatar(
+              radius: 20,
+              backgroundColor: Colors.transparent,
+              // Убедитесь, что у вас есть эти изображения в assets
+              backgroundImage: AssetImage(flagAsset), 
+            ),
+            const SizedBox(width: 20),
+            // Название языка
+            Text(
+              languageName,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF333333),
+              ),
+            ),
+          ],
         ),
       ),
     );

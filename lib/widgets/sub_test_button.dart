@@ -19,7 +19,7 @@ class SubTestButton extends StatelessWidget {
           side: BorderSide(color: Colors.grey.shade400, width: 1.5), // Рамка
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           elevation: 2.0, // Небольшая тень
-          shadowColor: Colors.grey.withOpacity(0.2),
+          shadowColor: Colors.grey.withValues(alpha: 0.2),
         ),
         child: Text(
           title,
