@@ -7,6 +7,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'quiz_result_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // --- Модель QuizTask ---
 class QuizTask {
@@ -14,7 +15,7 @@ class QuizTask {
   final String? text;
   final String? audioUrl;
   final String? sentence;
-  final String type; 
+  final String type;
   final String question;
   final List<String> options;
   final int correctAnswerIndex;
@@ -67,7 +68,6 @@ class _QuizScreenState extends State<QuizScreen> {
   int _currentIndex = 0;
   int _score = 0;
 
-
   // Плееры и запись
   final AudioPlayer _audioPlayer = AudioPlayer();
   final AudioPlayer _userPlayer = AudioPlayer();
@@ -75,7 +75,7 @@ class _QuizScreenState extends State<QuizScreen> {
   final AudioRecorder _recorder = AudioRecorder();
   StreamSubscription<PlayerState>? _playerStateSubscription;
   String? _currentlyLoadedAudioUrl;
-  
+
   // Общее состояние UI
   bool _isPlayerLoading = false;
   bool _isPlaying = false;
@@ -112,10 +112,7 @@ class _QuizScreenState extends State<QuizScreen> {
       }
     });
   }
-  void _playFeedbackSound(bool isCorrect, String taskType) async {
-  if (taskType == 'speaking') return;
 
-}
   @override
   void dispose() {
     _playerStateSubscription?.cancel();
@@ -131,7 +128,7 @@ class _QuizScreenState extends State<QuizScreen> {
         .collection('levels').doc(widget.levelId)
         .collection('sub_tests').doc(widget.subTestId)
         .collection('tasks').get();
-    
+
     _tasks = snapshot.docs.map((doc) => QuizTask.fromFirestore(doc)).toList();
     _tasks.shuffle();
     return _tasks;
@@ -141,7 +138,6 @@ class _QuizScreenState extends State<QuizScreen> {
     if (_tasks.isEmpty) return;
     final task = _tasks[_currentIndex];
 
-    // Сброс всех состояний
     _isMcqAnswered = false;
     _selectedAnswerIndex = null;
     _isSentenceAnswered = false;
@@ -163,35 +159,32 @@ class _QuizScreenState extends State<QuizScreen> {
     }
   }
 
-Future<void> _loadAudio(String url) async {
-  if (url == _currentlyLoadedAudioUrl) return;
+ Future<void> _loadAudio(String url) async {
+  if (url.isEmpty || url == _currentlyLoadedAudioUrl) {
+    setState(() => _isPlayerLoading = false);
+    return;
+  }
   try {
-    // ❗ Проверка: не закрыт ли экран перед началом
-    if (!mounted) return; 
     setState(() => _isPlayerLoading = true);
-    
-    await _audioPlayer.setUrl(url);
+    // Добавляем таймаут, чтобы загрузка не висела вечно
+    await _audioPlayer.setUrl(url).timeout(const Duration(seconds: 10));
     _currentlyLoadedAudioUrl = url;
-    
-    // ❗ Проверка: не закрыл ли пользователь экран, пока грузился звук
-    if (!mounted) return; 
-    setState(() => _isPlayerLoading = false);
   } catch (e) {
-    if (!mounted) return;
-    setState(() => _isPlayerLoading = false);
+    debugPrint("Ошибка загрузки аудио: $e");
+  } finally {
+    if (mounted) setState(() => _isPlayerLoading = false);
   }
 }
 
-  // Логика записи (Speaking)
   Future<void> _startRecording() async {
     try {
       if (await _recorder.hasPermission()) {
         final dir = await getApplicationDocumentsDirectory();
         final path = '${dir.path}/speech_${DateTime.now().millisecondsSinceEpoch}.m4a';
         await _recorder.start(const RecordConfig(), path: path);
-        setState(() { 
-          _isRecording = true; 
-          _userRecordingPath = path; 
+        setState(() {
+          _isRecording = true;
+          _userRecordingPath = path;
           _hasUserRecording = false;
         });
       }
@@ -211,86 +204,96 @@ Future<void> _loadAudio(String url) async {
 
   Future<void> _playUserRecording() async {
     if (_userRecordingPath != null) {
-      await _userPlayer.setFilePath(_userRecordingPath!); 
+      await _userPlayer.setFilePath(_userRecordingPath!);
       _userPlayer.play();
     }
   }
 
-  //  UI Рендеринг 
-  @override
-Widget build(BuildContext context) {
-  return Scaffold(
-    // Делаем AppBar прозрачным, чтобы фон был виден полностью
-    appBar: AppBar(
-      title: Text(widget.subTestTitle),
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-    ),
-    extendBodyBehindAppBar: true, // Фон заходит под верхнюю панель
-    body: Container(
-      width: double.infinity,
-      height: double.infinity,
-      decoration: BoxDecoration(
-        image: DecorationImage(
-          image: const AssetImage('assets/images/mountain_gr.png'),
-          fit: BoxFit.cover,
-          // Добавляем фильтр, чтобы картинка была светлее и текст читался лучше
-          colorFilter: ColorFilter.mode(
-            Colors.white.withValues(alpha: 0.65), 
-            BlendMode.lighten
+  // --- Вспомогательный виджет для меток "вопрос", "ответ", "текст" ---
+  Widget _buildSmallLabel(String text) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 8, left: 4),
+        child: Text(
+          text.toLowerCase(),
+          style: TextStyle(
+            color: Colors.grey.shade600,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 0.5,
           ),
         ),
       ),
-      child: FutureBuilder<List<QuizTask>>(
-        future: _tasksFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (!snapshot.hasData || _tasks.isEmpty) {
-            return const Center(child: Text('Задания не найдены'));
-          }
+    );
+  }
 
-          final task = _tasks[_currentIndex];
-
-          return SafeArea(
-            child: Column(
-              children: [
-                _buildProgressBar(), // Ваша полоска и нумерация
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: _buildTaskBody(task), // Контент (MCQ, Жазуу и т.д.)
-                  ),
-                ),
-                _buildBottomAction(task), // Кнопки "Проверить" или "Далее"
-              ],
-            ),
-          );
-        },
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.subTestTitle),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
-    ),
-  );
-}
-
-Widget _buildProgressBar() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
-      child: Row( 
-        children: [
-          // 1. Нумерация слева
-          Text(
-            "${_currentIndex + 1}/${_tasks.length}",
-            style: const TextStyle(
-              fontWeight: FontWeight.bold, 
-              fontSize: 14,
-              color: Colors.grey,
+      extendBodyBehindAppBar: true,
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          image: DecorationImage(
+            image: const AssetImage('assets/images/mountain_gr.png'),
+            fit: BoxFit.cover,
+            colorFilter: ColorFilter.mode(
+              Colors.white.withValues(alpha: 0.65),
+              BlendMode.lighten
             ),
           ),
-          const SizedBox(width: 12), // Отступ между текстом и полоской
-          
-          // 2. Полоска прогресса (Expanded заставляет её занять всё оставшееся место)
-          Expanded( 
+        ),
+        child: FutureBuilder<List<QuizTask>>(
+          future: _tasksFuture,
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return Center(child: Text("Ошибка загрузки: ${snapshot.error}"));
+            }
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (!snapshot.hasData || _tasks.isEmpty) {
+              return const Center(child: Text('Задания не найдены'));
+            }
+
+            final task = _tasks[_currentIndex];
+
+            return SafeArea(
+              child: Column(
+                children: [
+                  _buildProgressBar(),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: _buildTaskBody(task),
+                    ),
+                  ),
+                  _buildBottomAction(task),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProgressBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
+      child: Row(
+        children: [
+          Text("${_currentIndex + 1}/${_tasks.length}",
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.grey)),
+          const SizedBox(width: 12),
+          Expanded(
             child: ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: LinearProgressIndicator(
@@ -315,14 +318,15 @@ Widget _buildProgressBar() {
     }
   }
 
-  // --- 1. UI: Writing (Сборка предложения) ---
+  // --- 1. UI: Writing (Жазуу) ---
   Widget _buildWritingUI(QuizTask task) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Row(children: [
           Expanded(child: Text(task.question, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
           IconButton(
-            icon: const Icon(Icons.lightbulb, color: Colors.orange), 
+            icon: const Icon(Icons.lightbulb, color: Colors.orange),
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text("hint_first_word".tr(args: [_correctFirstWord])))
@@ -331,20 +335,23 @@ Widget _buildProgressBar() {
           ),
         ]),
         const SizedBox(height: 20),
-        // Контейнер для собранных слов (с исправленным BoxConstraints)
+        _buildSmallLabel("answer".tr()),
         Container(
           width: double.infinity,
           constraints: const BoxConstraints(minHeight: 120),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.grey.shade100, 
-            borderRadius: BorderRadius.circular(12), 
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Colors.grey.shade300),
           ),
           child: Wrap(
-            spacing: 8, runSpacing: 8, 
+            spacing: 10,
+             runSpacing: 10,
+             alignment: WrapAlignment.center,
+             runAlignment: WrapAlignment.center,
             children: _assembledWords.asMap().entries.map((e) => ActionChip(
-              label: Text(e.value), 
+              label: Text(e.value),
               onPressed: _isSentenceAnswered ? null : () {
                 setState(() { _wordBank.add(e.value); _assembledWords.removeAt(e.key); });
               },
@@ -352,7 +359,6 @@ Widget _buildProgressBar() {
           ),
         ),
         const SizedBox(height: 40),
-        // Банк слов
         Wrap(
           spacing: 10, runSpacing: 10, alignment: WrapAlignment.center,
           children: _wordBank.asMap().entries.map((e) => ActionChip(
@@ -367,213 +373,191 @@ Widget _buildProgressBar() {
     );
   }
 
-  // UI Speaking 
+  // --- 2. UI: Speaking (Сүйлөө) ---
   Widget _buildSpeakingUI(QuizTask task) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("Прослушайте образец:", style: TextStyle(color: Colors.grey)),
-        _buildAudioPlayerWidget(),
-        const SizedBox(height: 30),
+        Text("listen_tt_sample".tr(), style: TextStyle(color: Colors.grey)),
+        Center(child: _buildAudioPlayerWidget()),
+        const SizedBox(height: 15),
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: Colors.blue.shade50,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: Colors.blue.shade200),
           ),
-          child: Text(
-            task.question, 
-            textAlign: TextAlign.center, 
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-          ),
+          child: Text(task.question, textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
         ),
-        const SizedBox(height: 50),
-        _buildMicButton(),
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
+        _buildSmallLabel("answer".tr()),
+        Center(child: _buildMicButton()),
         if (_hasUserRecording)
-          ElevatedButton.icon(
-            onPressed: _playUserRecording,
-            icon: const Icon(Icons.play_circle_filled),
-            label: Text("listen_user".tr()),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange, 
-              foregroundColor: Colors.white,
-              shape: const StadiumBorder(),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 24),
+              child: ElevatedButton.icon(
+                onPressed: _playUserRecording,
+                icon: const Icon(Icons.play_circle_filled),
+                label: Text("listen_user".tr()),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white, shape: const StadiumBorder()),
+              ),
             ),
           )
       ],
     );
   }
 
-  // UI MCQ (Обычный тест) 
+  // --- 3. UI: MCQ (Лексика, Грамматика, Аудио) ---
   Widget _buildMcqUI(QuizTask task) {
-  return Column(
-    children: [
-      if (task.audioUrl != null && task.audioUrl!.isNotEmpty) ...[
-        _buildAudioPlayerWidget(),
-        const SizedBox(height: 20),
-      ],
-      
-      // Блок вопроса в рамке 
-      Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.blue.shade200, width: 2), 
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withValues(alpha: 0.1),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Text(
-          task.question, 
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold), 
-          textAlign: TextAlign.center
-        ),
-      ),
-      
-      const SizedBox(height: 20),
-
-      // Варианты ответов
-      ...List.generate(task.options.length, (index) => Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: SizedBox(
+    if (task.options.isEmpty) {
+      return const Center(child: Text('No options available'));
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSmallLabel("question".tr()),
+        if (task.audioUrl != null && task.audioUrl!.isNotEmpty) ...[
+          Center(child: _buildAudioPlayerWidget()),
+          const SizedBox(height: 20),
+        ],
+        Container(
           width: double.infinity,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.all(16),
-              backgroundColor: _isMcqAnswered 
-                  ? (index == task.correctAnswerIndex ? Colors.green.shade100 : (index == _selectedAnswerIndex ? Colors.red.shade100 : Colors.white)) 
-                  : Colors.white,
-              foregroundColor: Colors.black,
-              shape: const StadiumBorder(), 
-              side: BorderSide(
-                color: _isMcqAnswered && index == task.correctAnswerIndex ? Colors.green : Colors.grey.shade400
-              ),
-            ),
-            onPressed: _isMcqAnswered ? null : () => _submitMcq(index),
-            child: Text(task.options[index], style: const TextStyle(fontSize: 14)),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.blue.shade200, width: 2),
           ),
+          child: Text(task.question, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
         ),
-      )),
-    ],
-  );
-}
+        const SizedBox(height: 15),
+        _buildSmallLabel("answer".tr()),
+        ...List.generate(task.options.length, (index) => Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.all(16),
+                backgroundColor: _isMcqAnswered
+                    ? (index == task.correctAnswerIndex ? Colors.green.shade100 : (index == _selectedAnswerIndex ? Colors.red.shade100 : Colors.white))
+                    : Colors.white,
+                foregroundColor: Colors.black,
+                shape: const StadiumBorder(),
+                side: BorderSide(color: _isMcqAnswered && index == task.correctAnswerIndex ? Colors.green : Colors.grey.shade400),
+              ),
+              onPressed: _isMcqAnswered ? null : () => _submitMcq(index),
+              child: Text(task.options[index], style: const TextStyle(fontSize: 14)),
+            ),
+          ),
+        )),
+      ],
+    );
+  }
 
-  // UI Reading
+  // --- 4. UI: Reading (Окуу) ---
   Widget _buildReadingUI(QuizTask task) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (task.text != null) 
+        if (task.text != null) ...[
+          _buildSmallLabel("текст"),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.grey.shade200, 
+              color: Colors.grey.shade100,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.grey.shade300),
             ),
             constraints: const BoxConstraints(maxHeight: 300),
             child: SingleChildScrollView(child: MarkdownBody(data: task.text!)),
           ),
-        const SizedBox(height: 30),
+          const SizedBox(height: 15),
+        ],
+        // Подтягивает "вопрос" и "ответ" автоматически
         _buildMcqUI(task),
       ],
     );
   }
 
-  // Вспомогательные виджеты
-
   Widget _buildAudioPlayerWidget() {
     return IconButton(
       iconSize: 72,
-      icon: _isPlayerLoading 
+      icon: _isPlayerLoading
           ? const CircularProgressIndicator()
           : Icon(_isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled, color: Colors.blue),
       onPressed: _isPlayerLoading ? null : () {
-        if (_isPlaying) { 
-          _audioPlayer.pause(); 
-        } else { 
-          _audioPlayer.play(); 
-        }
+        if (_isPlaying) { _audioPlayer.pause(); } else { _audioPlayer.play(); }
       },
     );
   }
 
   Widget _buildMicButton() {
-    return GestureDetector(
-      onTap: _isRecording ? _stopRecording : _startRecording,
-      child: Column(
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: _isRecording ? Colors.red : Colors.blue,
-              shape: BoxShape.circle,
-              boxShadow: _isRecording ? [BoxShadow(color: Colors.red.withOpacity(0.4), blurRadius: 20, spreadRadius: 10)] : [],
-            ),
-            child: Icon(_isRecording ? Icons.stop : Icons.mic, color: Colors.white, size: 48),
+  return GestureDetector(
+    // Это заставляет детектор ловить нажатия во всей области, 
+    // даже если она перекрыта прозрачным краем другого виджета
+    behavior: HitTestBehavior.opaque, 
+    onTap: _isRecording ? _stopRecording : _startRecording,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: _isRecording ? Colors.red : Colors.blue,
+            shape: BoxShape.circle,
+            boxShadow: _isRecording 
+              ? [BoxShadow(color: Colors.red.withValues(alpha: 0.4), blurRadius: 20, spreadRadius: 10)] 
+              : [],
           ),
-          const SizedBox(height: 12),
-          Text(
-            _isRecording ? "recording".tr() : "start_record".tr(),
-            style: TextStyle(
-              color: _isRecording ? Colors.red : Colors.blue, 
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
+          child: Icon(
+            _isRecording ? Icons.stop : Icons.mic, 
+            color: Colors.white, 
+            size: 48
           ),
-        ],
-      ),
-    );
-  }
-
-  // Логика действий 
+        ),
+        const SizedBox(height: 12),
+        Text(
+          _isRecording ? "recording".tr() : "start_record".tr(),
+          style: TextStyle(
+            color: _isRecording ? Colors.red : Colors.blue, 
+            fontWeight: FontWeight.bold, 
+            fontSize: 16
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   void _submitMcq(int index) {
-  final currentTask = _tasks[_currentIndex]; // Получаем текущую задачу
-  
-  setState(() {
-    _isMcqAnswered = true;
-    _selectedAnswerIndex = index;
-    
-    // Проверяем правильность ответа
-    bool isCorrect = (index == currentTask.correctAnswerIndex);
-    if (isCorrect) _score++; // Увеличиваем счет при успехе
+    final currentTask = _tasks[_currentIndex];
+    setState(() {
+      _isMcqAnswered = true;
+      _selectedAnswerIndex = index;
+      bool isCorrect = (index == currentTask.correctAnswerIndex);
+      if (isCorrect) _score++;
+      _playFeedbackSound(isCorrect, currentTask.type);
+    });
+    Future.delayed(const Duration(milliseconds: 1500), _nextQuestion);
+  }
 
-    // 🔊 Запускаем звук (автоматически пропустит Говорение внутри функции)
-    _playFeedbackSound(isCorrect, currentTask.type); 
-  });
-
-  // Задержка перед переходом к следующему вопросу
-  Future.delayed(const Duration(milliseconds: 1500), _nextQuestion);
-}
-  
   void _nextQuestion() {
     _audioPlayer.stop();
     _userPlayer.stop();
     if (_currentIndex < _tasks.length - 1) {
-      setState(() { 
-        _currentIndex++; 
-        _prepareCurrentTask(); 
-      });
+      setState(() { _currentIndex++; _prepareCurrentTask(); });
     } else {
-      Navigator.pushReplacement(
-        context, 
-        MaterialPageRoute(builder: (c) => QuizResultScreen(score: _score, totalQuestions: _tasks.length))
-      );
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (c) => QuizResultScreen(score: _score, totalQuestions: _tasks.length)));
     }
   }
 
   Widget _buildBottomAction(QuizTask task) {
-    // Кнопка для режима Writing
     if (task.type == 'writing') {
       bool isReadyToCheck = _wordBank.isEmpty;
       return AnimatedOpacity(
@@ -586,38 +570,27 @@ Widget _buildProgressBar() {
             height: 54,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: _isSentenceAnswered 
-                    ? (_assembledWords.join(' ') == task.sentence ? Colors.green : Colors.red) 
+                backgroundColor: _isSentenceAnswered
+                    ? (_assembledWords.join(' ') == task.sentence ? Colors.green : Colors.red)
                     : Colors.green,
                 shape: const StadiumBorder(),
-                elevation: 4,
               ),
               onPressed: (isReadyToCheck && !_isSentenceAnswered) ? () {
-
                 bool isCorrect = _assembledWords.join(' ') == task.sentence;
-                
-                setState(() {
-                  _isSentenceAnswered = true;
-                  if (isCorrect) _score++;
-                });
-
-                _playFeedbackSound(isCorrect, task.type); 
-
+                setState(() { _isSentenceAnswered = true; if (isCorrect) _score++; });
+                _playFeedbackSound(isCorrect, task.type);
                 Future.delayed(const Duration(milliseconds: 1500), _nextQuestion);
               } : null,
-              child: Text(
-                _isSentenceAnswered 
-                    ? (_assembledWords.join(' ') == task.sentence ? "correct".tr() : "incorrect".tr()) 
-                    : "check_button".tr(),
-                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-           ),
+              child: Text(_isSentenceAnswered
+                  ? (_assembledWords.join(' ') == task.sentence ? "correct".tr() : "incorrect".tr())
+                  : "check_button".tr(),
+                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
           ),
         ),
       );
     }
 
-    // Кнопка для режима Speaking
     if (task.type == 'speaking') {
       return Padding(
         padding: const EdgeInsets.all(24),
@@ -625,15 +598,8 @@ Widget _buildProgressBar() {
           width: double.infinity,
           height: 54,
           child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green, 
-              shape: const StadiumBorder(),
-              elevation: 4,
-            ),
-            onPressed: _hasUserRecording ? () {
-              _score++; 
-              _nextQuestion();
-            } : null,
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: const StadiumBorder()),
+            onPressed: _hasUserRecording ? () { _score++; _nextQuestion(); } : null,
             child: Text("next".tr(), style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
           ),
         ),
@@ -647,14 +613,24 @@ Widget _buildProgressBar() {
         width: double.infinity,
         padding: const EdgeInsets.all(20),
         color: isCorrect ? Colors.green : Colors.red,
-        child: Text(
-          isCorrect ? "correct".tr() : "incorrect".tr(),
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
-        ),
+        child: Text(isCorrect ? "correct".tr() : "incorrect".tr(),
+          textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
       );
     }
-
     return const SizedBox(height: 20);
+  }
+
+  void _playFeedbackSound(bool isCorrect, String taskType) async {
+    if (taskType == 'speaking') return;
+    final prefs = await SharedPreferences.getInstance();
+    if (!(prefs.getBool('test_sound') ?? true)) return;
+    try {
+      await _effectPlayer.stop();
+      String assetPath = isCorrect ? 'assets/audio/success.mp3' : 'assets/audio/err.mp3';
+      await _effectPlayer.setAsset(assetPath);
+      await _effectPlayer.play();
+    } catch (e) {
+      debugPrint("Ошибка звука: $e");
+    }
   }
 }

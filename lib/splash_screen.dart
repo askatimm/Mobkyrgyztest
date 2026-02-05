@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:kyrgyztestapp/language_selection_screen.dart';
+import 'package:kyrgyztestapp/home_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -12,39 +14,38 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _startSplashTimer();
+    _startSplash();
   }
 
-  void _startSplashTimer() {
+  Future<void> _startSplash() async {
+    await Future.delayed(const Duration(seconds: 3));
 
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        _navigateToHome();
-      }
-    });
-  }
+    final prefs = await SharedPreferences.getInstance();
+    final bool isLanguageSelected =
+        prefs.getBool('language_selected') ?? false;
 
-  void _navigateToHome() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const LanguageSelectionScreen()),
-    );
+    if (!mounted) return;
+
+    if (isLanguageSelected) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
+    } else {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => const LanguageSelectionScreen(),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white, 
-      body: Stack(
-       
-        fit: StackFit.expand, 
-        children: [
-         
-          Image.asset(
-            'assets/images/logo.png',
-            fit: BoxFit.cover, 
-    
-          ),      
-        ],
+      backgroundColor: Colors.white,
+      body: Image.asset(
+        'assets/images/logo1.png',
+        fit: BoxFit.cover,
       ),
     );
   }

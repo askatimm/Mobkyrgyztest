@@ -1,6 +1,7 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'level_detail_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -18,44 +19,35 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  static final List<Widget> _widgetOptions = <Widget>[
+  @override
+Widget build(BuildContext context) {
+  // 👇 Эта строка заставляет HomeScreen пересобираться при смене языка
+  context.locale;
+
+  final List<Widget> widgetOptions = [
     const HomeContent(),
-    // Заглушка для экрана настроек
-    Center(
-      child: Text(
-        'nav_settings'.tr(),
-        style: const TextStyle(fontSize: 30),
-      ),
-    ),
+    const SettingsScreen(),
   ];
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      extendBody: true,
-      body: _widgetOptions.elementAt(_selectedIndex),
-      bottomNavigationBar: BottomNavigationBar(
-        elevation: 0,
-        backgroundColor: Colors.white.withValues(alpha: 1),
-        items: <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.school),
-            label: 'nav_home'.tr(),
-          ),
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.settings),
-            label: 'nav_settings'.tr(),
-          ),
-        ],
-        currentIndex: _selectedIndex,
-        selectedItemColor: Colors.blueAccent,
-        unselectedItemColor: Colors.grey.shade600,
-        onTap: _onItemTapped,
-      ),
-    );
-  }
+  return Scaffold(
+    body: widgetOptions.elementAt(_selectedIndex),
+    bottomNavigationBar: BottomNavigationBar(
+      items: [
+        BottomNavigationBarItem(
+          icon: const Icon(Icons.school),
+          label: 'nav_home'.tr(),
+        ),
+        BottomNavigationBarItem(
+          icon: const Icon(Icons.settings),
+          label: 'nav_settings'.tr(),
+        ),
+      ],
+      currentIndex: _selectedIndex,
+      onTap: _onItemTapped,
+    ),
+  );
 }
-
+}
 class HomeContent extends StatelessWidget {
   const HomeContent({super.key});
 
@@ -129,7 +121,7 @@ class HomeContent extends StatelessWidget {
                       Expanded(
                         child: _buildLevelCard(
                           context,
-                          imagePath: 'assets/images/level_a2.png',
+                          imagePath: 'assets/images/level_b2.png',
                           title: 'levels.a2'.tr(),
                           levelId: 'level_a2',
                           height: squareHeight,
@@ -155,7 +147,7 @@ class HomeContent extends StatelessWidget {
                       Expanded(
                         child: _buildLevelCard(
                           context,
-                          imagePath: 'assets/images/level_b2.png',
+                          imagePath: 'assets/images/level_a2.png',
                           title: 'levels.b2'.tr(),
                           levelId: 'level_b2',
                           height: squareHeight,

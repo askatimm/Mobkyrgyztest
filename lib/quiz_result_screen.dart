@@ -19,10 +19,10 @@ class QuizResultScreen extends StatelessWidget {
   final int totalQuestions;
 
   const QuizResultScreen({
-    Key? key,
+    super.key,
     required this.score,
     required this.totalQuestions,
-  }) : super(key: key);
+  });
 
   // 💡 Эта функция определяет, что показывать,
   //    основываясь на проценте
@@ -58,6 +58,7 @@ class QuizResultScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text('results_title'.tr()),
+        centerTitle: true,
         automaticallyImplyLeading: false, // Убираем кнопку "назад"
       ),
       body: Center(
