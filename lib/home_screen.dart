@@ -20,56 +20,189 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   @override
-Widget build(BuildContext context) {
-  // 👇 Эта строка заставляет HomeScreen пересобираться при смене языка
-  context.locale;
+  Widget build(BuildContext context) {
+    context.locale;
 
-  final List<Widget> widgetOptions = [
-    const HomeContent(),
-    const SettingsScreen(),
-  ];
+    final List<Widget> widgetOptions = [
+      const HomeContent(),
+      const SettingsScreen(),
+    ];
 
-  return Scaffold(
-    body: widgetOptions.elementAt(_selectedIndex),
-    bottomNavigationBar: BottomNavigationBar(
-      items: [
-        BottomNavigationBarItem(
-          icon: const Icon(Icons.school),
-          label: 'nav_home'.tr(),
-        ),
-        BottomNavigationBarItem(
-          icon: const Icon(Icons.settings),
-          label: 'nav_settings'.tr(),
-        ),
-      ],
-      currentIndex: _selectedIndex,
-      onTap: _onItemTapped,
-    ),
-  );
+    return Scaffold(
+      extendBody: true,
+      body: widgetOptions.elementAt(_selectedIndex),
+      bottomNavigationBar: _BubbleBottomBar(
+        selectedIndex: _selectedIndex,
+        onTap: _onItemTapped,
+      ),
+    );
+  }
 }
+
+class _BubbleBottomBar extends StatelessWidget {
+  final int selectedIndex;
+  final ValueChanged<int> onTap;
+
+  const _BubbleBottomBar({
+    required this.selectedIndex,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 110,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.bottomCenter,
+        children: [
+          Positioned(
+            left: 20,
+            right: 20,
+            bottom: 16,
+            child: Container(
+              height: 70,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(36),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.12),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _BottomBarItem(
+                      icon: Icons.home_outlined,
+                      label: 'nav_home'.tr(),
+                      selected: selectedIndex == 0,
+                      hideInside: selectedIndex == 0,
+                      onTap: () => onTap(0),
+                    ),
+                  ),
+                  Expanded(
+                    child: _BottomBarItem(
+                      icon: Icons.settings_outlined,
+                      label: 'nav_settings'.tr(),
+                      selected: selectedIndex == 1,
+                      hideInside: selectedIndex == 1,
+                      onTap: () => onTap(1),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
+            bottom: 38,
+            left: selectedIndex == 0
+                ? MediaQuery.of(context).size.width * 0.25 - 34
+                : MediaQuery.of(context).size.width * 0.75 - 34,
+            child: GestureDetector(
+              onTap: () => onTap(selectedIndex),
+              child: Container(
+                width: 68,
+                height: 68,
+                decoration: BoxDecoration(
+                  color: const Color.fromARGB(255, 131, 111, 231),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.18),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                  border: Border.all(color: Colors.white, width: 4),
+                ),
+                child: Icon(
+                  selectedIndex == 0
+                      ? Icons.home_outlined
+                      : Icons.settings_outlined,
+                  color: Colors.white,
+                  size: 30,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
+
+class _BottomBarItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final bool hideInside;
+  final VoidCallback onTap;
+
+  const _BottomBarItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.hideInside,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? const Color(0xFF7A3E7A) : Colors.grey.shade700;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(36),
+      onTap: onTap,
+      child: SizedBox(
+        height: double.infinity,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: hideInside ? Colors.transparent : color,
+              size: 26,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              hideInside ? '' : label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class HomeContent extends StatelessWidget {
   const HomeContent({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Высота квадратных карточек (A1-B2)
-    const double squareHeight = 160; 
-    // Высота широкой карточки (C1)
-    const double wideHeight = 110;
+    const double squareHeight = 170;
+    const double wideHeight = 115;
     const double gap = 16;
 
     return Stack(
       children: [
-        /// 1. ФОНОВОЕ ИЗОБРАЖЕНИЕ
         Positioned.fill(
           child: Image.asset(
-            'assets/images/mountains_bg.png',
+            'assets/images/mountain1.png',
             fit: BoxFit.cover,
           ),
         ),
-
-        /// 2. КОНТЕНТ
         SafeArea(
           child: SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
@@ -78,8 +211,6 @@ class HomeContent extends StatelessWidget {
               child: Column(
                 children: [
                   const SizedBox(height: 20),
-
-                  /// ЗАГОЛОВОК
                   const Text(
                     'Кыргызтест',
                     style: TextStyle(
@@ -89,10 +220,7 @@ class HomeContent extends StatelessWidget {
                       letterSpacing: 1.2,
                     ),
                   ),
-
                   const SizedBox(height: 8),
-
-                  /// ПОДЗАГОЛОВОК (из JSON)
                   Text(
                     'app_subtitle'.tr(),
                     textAlign: TextAlign.center,
@@ -102,10 +230,8 @@ class HomeContent extends StatelessWidget {
                       color: Colors.grey.shade800,
                     ),
                   ),
+                  const SizedBox(height: 30),
 
-                  const SizedBox(height: 40),
-
-                  /// СЕТКА КАРТ
                   Row(
                     children: [
                       Expanded(
@@ -129,9 +255,7 @@ class HomeContent extends StatelessWidget {
                       ),
                     ],
                   ),
-
                   SizedBox(height: gap),
-
                   Row(
                     children: [
                       Expanded(
@@ -155,9 +279,7 @@ class HomeContent extends StatelessWidget {
                       ),
                     ],
                   ),
-
                   SizedBox(height: gap),
-
                   _buildLevelCard(
                     context,
                     imagePath: 'assets/images/level_c1.png',
@@ -166,8 +288,7 @@ class HomeContent extends StatelessWidget {
                     height: wideHeight,
                     isWide: true,
                   ),
-
-                  const SizedBox(height: 120), // Отступ для BottomNav
+                  const SizedBox(height: 140),
                 ],
               ),
             ),
@@ -214,35 +335,35 @@ class HomeContent extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // ИЗОБРАЖЕНИЕ (Сверху)
                 Expanded(
-                  flex: isWide ? 6 : 9, 
+                  flex: isWide ? 5 : 7,
                   child: Image.asset(
                     imagePath,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => 
+                    errorBuilder: (context, error, stackTrace) =>
                         Container(color: Colors.grey.shade200),
                   ),
                 ),
-                
-                // ТЕКСТОВЫЙ БЛОК (Теперь по центру)
                 Expanded(
-                  flex: isWide ? 2 : 3,
+                  flex: 2,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    // Центрируем содержимое контейнера
-                    alignment: Alignment.center, 
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    alignment: Alignment.center,
                     child: Text(
                       title,
-                      // Центрируем сам текст внутри виджета
-                      textAlign: TextAlign.center, 
+                      textAlign: TextAlign.center,
                       style: const TextStyle(
-                        fontSize: 15,
+                        fontSize: 14,
                         fontWeight: FontWeight.bold,
                         color: Colors.black87,
+                        height: 1,
                       ),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
+                      softWrap: true,
                     ),
                   ),
                 ),

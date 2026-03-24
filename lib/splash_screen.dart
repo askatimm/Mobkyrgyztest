@@ -18,6 +18,7 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _startSplash() async {
+    // Ждем 3 секунды
     await Future.delayed(const Duration(seconds: 3));
 
     final prefs = await SharedPreferences.getInstance();
@@ -26,6 +27,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
     if (!mounted) return;
 
+    // Навигация
     if (isLanguageSelected) {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const HomeScreen()),
@@ -42,10 +44,21 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: Image.asset(
-        'assets/images/logo1.png',
-        fit: BoxFit.cover,
+      // Используем Stack, чтобы изображение перекрыло всю площадь экрана
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/splashlogo1.png',
+              // BoxFit.cover растягивает картинку так, чтобы не было пустых мест.
+              // Лишние части (верх/низ или бока) будут аккуратно обрезаны 
+              // в зависимости от пропорций экрана телефона.
+              fit: BoxFit.cover, 
+              // Центрируем, чтобы обрезка шла равномерно со всех сторон
+              alignment: Alignment.center,
+            ),
+          ),
+        ],
       ),
     );
   }
