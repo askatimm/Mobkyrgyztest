@@ -15,16 +15,24 @@ class QuizTask {
   final String? text;
   final String? audioUrl;
   final String? sentence;
+  final String? promptSentence;
+  final String? correctText;
   final String type;
   final String question;
   final List<String> options;
   final int correctAnswerIndex;
+  final List<dynamic>? parts;
+  final List<String>? answers;
 
   QuizTask({
     required this.id,
     this.text,
     this.audioUrl,
     this.sentence,
+    this.promptSentence,
+    this.correctText,
+    this.parts,
+    this.answers,
     required this.type,
     required this.question,
     required this.options,
@@ -32,16 +40,23 @@ class QuizTask {
   });
 
   factory QuizTask.fromFirestore(DocumentSnapshot doc) {
-    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    final data = doc.data() as Map<String, dynamic>;
+
     return QuizTask(
       id: doc.id,
       text: data['text'],
       audioUrl: data['audioUrl'],
       sentence: data['sentence'],
+      promptSentence: data['promptSentence'],
+      correctText: data['correctText'],
       type: data['type'] ?? 'mcq',
       question: data['question'] ?? '',
       options: List<String>.from(data['options'] ?? []),
       correctAnswerIndex: data['correctAnswerIndex'] ?? 0,
+      parts: data['parts'] as List<dynamic>?,
+      answers: data['answers'] != null
+        ? List<String>.from(data['answers'])
+        : null,
     );
   }
 }
@@ -67,6 +82,18 @@ class _QuizScreenState extends State<QuizScreen> {
   List<QuizTask> _tasks = [];
   int _currentIndex = 0;
   int _score = 0;
+
+  final TextEditingController _writingController = TextEditingController();
+
+  List<TextEditingController> _gapControllers = [];
+  bool _isWritingAnswered = false;
+
+  bool get _isAdvancedWritingLevel {
+    final level = widget.levelId.toLowerCase();
+    return level == 'level_b1' ||
+        level == 'level_b2' ||
+        level == 'level_c1';
+  }
 
   int _getTaskLimit() {
     switch (widget.subTestId) {
@@ -143,8 +170,18 @@ class _QuizScreenState extends State<QuizScreen> {
     _audioPlayer.dispose();
     _userPlayer.dispose();
     _recorder.dispose();
+    _writingController.dispose();
+    _disposeGapControllers();
     super.dispose();
   }
+
+  void _disposeGapControllers() {
+    for (final controller in _gapControllers) {
+      controller.dispose();
+    }
+    _gapControllers.clear();
+  }
+
 
   Future<List<QuizTask>> _loadTasks() async {
     final snapshot = await FirebaseFirestore.instance
@@ -169,37 +206,135 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   void _prepareCurrentTask() {
-    if (_tasks.isEmpty) return;
-    final task = _tasks[_currentIndex];
+  if (_tasks.isEmpty) return;
 
-    _isMcqAnswered = false;
-    _selectedAnswerIndex = null;
-    _isSentenceAnswered = false;
-    _wordBank = [];
-    _assembledWords = [];
-    _correctFirstWord = "";
-    _hasUserRecording = false;
-    _userRecordingPath = null;
-    _isPlaying = false;
+  final task = _tasks[_currentIndex];
 
-    _currentlyLoadedAudioUrl = null;
-    _audioPlayer.stop();
+  _isMcqAnswered = false;
+  _selectedAnswerIndex = null;
+  _isSentenceAnswered = false;
+  _isWritingAnswered = false;
 
-    if (task.type == 'writing' && task.sentence != null) {
+  _disposeGapControllers();
+
+  _wordBank = [];
+  _assembledWords = [];
+  _correctFirstWord = "";
+  _hasUserRecording = false;
+  _userRecordingPath = null;
+  _isPlaying = false;
+
+  _currentlyLoadedAudioUrl = null;
+  _audioPlayer.stop();
+
+  if (task.type == 'writing') {
+    if (_isAdvancedWritingLevel) {
+      final count = task.answers?.length ?? 0;
+      _gapControllers =
+          List.generate(count, (_) => TextEditingController());
+    } else if (task.sentence != null) {
       final words = task.sentence!
           .trim()
           .split(' ')
           .where((w) => w.isNotEmpty)
           .toList();
+
       if (words.isNotEmpty) {
         _correctFirstWord = words.first;
         _wordBank = List.from(words)..shuffle();
       }
-    } else if (task.audioUrl != null && task.audioUrl!.isNotEmpty) {
-      _loadAudio(task.audioUrl!);
-      
+    }
+  } else if (task.audioUrl != null && task.audioUrl!.isNotEmpty) {
+    _loadAudio(task.audioUrl!);
+  }
+}
+ 
+  String _normalizeAnswer(String value) {
+    return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  bool _areAllGapsFilled() {
+    if (_gapControllers.isEmpty) return false;
+    return _gapControllers.every((c) => c.text.trim().isNotEmpty);
+  }
+
+  Widget _buildLetterBoxesField(
+  TextEditingController controller,
+  int boxCount,
+) {
+  const double boxWidth = 20;
+  const double boxHeight = 28;
+  const double gap = 3;
+
+  return SizedBox(
+    width: boxCount * (boxWidth + gap),
+    child: Stack(
+      alignment: Alignment.centerLeft,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(
+            boxCount,
+            (index) => Container(
+              width: boxWidth,
+              height: boxHeight,
+              margin: const EdgeInsets.only(right: gap),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade400),
+                borderRadius: BorderRadius.circular(5),
+                color: Colors.white,
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                index < controller.text.length
+                    ? controller.text[index]
+                    : '',
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+        ),
+        Opacity(
+          opacity: 0.01,
+          child: SizedBox(
+            width: boxCount * (boxWidth + gap),
+            child: TextField(
+              controller: controller,
+              enabled: !_isWritingAnswered,
+              maxLength: boxCount,
+              onChanged: (_) {
+                setState(() {});
+              },
+              decoration: const InputDecoration(
+                counterText: '',
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+  bool _isWritingAnswerCorrect(QuizTask task) {
+  final correctAnswers = task.answers ?? [];
+  if (correctAnswers.length != _gapControllers.length) return false;
+
+  for (int i = 0; i < correctAnswers.length; i++) {
+    if (_normalizeAnswer(_gapControllers[i].text) !=
+        _normalizeAnswer(correctAnswers[i])) {
+      return false;
     }
   }
+  return true;
+}
+
+
 
   Future<void> _loadAudio(String url) async {
     if (url.isEmpty || url == _currentlyLoadedAudioUrl) {
@@ -444,96 +579,155 @@ Widget _buildHighlightedQuestion(String text) {
 
   // --- 1. UI: Writing (Жазуу) ---
   Widget _buildWritingUI(QuizTask task) {
+  if (_isAdvancedWritingLevel) {
+    final parts = task.parts ?? [];
+    final answers = task.answers ?? [];
+    int gapIndex = 0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                task.question,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.lightbulb, color: Colors.orange),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      "hint_first_word".tr(args: [_correctFirstWord]),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ],
+        Text(
+          task.question,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         const SizedBox(height: 20),
-        _buildSmallLabel("answer".tr()),
         Container(
           width: double.infinity,
-          constraints: const BoxConstraints(minHeight: 120),
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade300),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.blue.shade200, width: 2),
           ),
-          child: Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            alignment: WrapAlignment.center,
-            runAlignment: WrapAlignment.center,
-            children: _assembledWords
-                .asMap()
-                .entries
-                .map(
-                  (e) => ActionChip(
-                    label: Text(e.value),
-                    onPressed: _isSentenceAnswered
-                        ? null
-                        : () {
-                            setState(() {
-                              _wordBank.add(e.value);
-                              _assembledWords.removeAt(e.key);
-                            });
-                          },
-                  ),
-                )
-                .toList(),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 2,
+                runSpacing: 10,
+                children: parts.map((part) {
+                  if (part == null) {
+                    final currentGap = gapIndex;
+                    final boxCount = answers[currentGap].length;
+                    gapIndex++;
+
+                    return _buildLetterBoxesField(
+                      _gapControllers[currentGap],
+                      boxCount,
+                    );
+                  }
+
+                  return Text(
+                    part.toString(),
+                    softWrap: true,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      height: 1.4,
+                    ),
+                  );
+                }).toList(),
+              );
+            },
           ),
         ),
-        const SizedBox(height: 40),
-        Wrap(
+      ],
+    );
+  }
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          Expanded(
+            child: Text(
+              task.question,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.lightbulb, color: Colors.orange),
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text("hint_first_word".tr(args: [_correctFirstWord])),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+      const SizedBox(height: 20),
+
+      Container(
+        width: double.infinity,
+        constraints: const BoxConstraints(minHeight: 120),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Wrap(
           spacing: 10,
           runSpacing: 10,
           alignment: WrapAlignment.center,
-          children: _wordBank
+          runAlignment: WrapAlignment.center,
+          children: _assembledWords
               .asMap()
               .entries
               .map(
                 (e) => ActionChip(
                   label: Text(e.value),
-                  backgroundColor: Colors.blue.shade50,
                   onPressed: _isSentenceAnswered
                       ? null
                       : () {
                           setState(() {
-                            _assembledWords.add(e.value);
-                            _wordBank.removeAt(e.key);
+                            _wordBank.add(e.value);
+                            _assembledWords.removeAt(e.key);
                           });
                         },
                 ),
               )
               .toList(),
         ),
-      ],
-    );
-  }
+      ),
+      const SizedBox(height: 40),
+
+      Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        alignment: WrapAlignment.center,
+        children: _wordBank
+            .asMap()
+            .entries
+            .map(
+              (e) => ActionChip(
+                label: Text(e.value),
+                backgroundColor: Colors.blue.shade50,
+                onPressed: _isSentenceAnswered
+                    ? null
+                    : () {
+                        setState(() {
+                          _assembledWords.add(e.value);
+                          _wordBank.removeAt(e.key);
+                        });
+                      },
+              ),
+            )
+            .toList(),
+      ),
+    ],
+  );
+}
 
   // --- 2. UI: Speaking (Сүйлөө) ---
   Widget _buildSpeakingUI(QuizTask task) {
@@ -792,59 +986,12 @@ Widget _buildHighlightedQuestion(String text) {
   }
 
   Widget _buildBottomAction(QuizTask task) {
-    if (task.type == 'writing') {
-      bool isReadyToCheck = _wordBank.isEmpty;
-      return AnimatedOpacity(
-        opacity: isReadyToCheck ? 1.0 : 0.0,
-        duration: const Duration(milliseconds: 300),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: SizedBox(
-            width: double.infinity,
-            height: 54,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _isSentenceAnswered
-                    ? (_assembledWords.join(' ') == task.sentence
-                          ? Colors.green
-                          : Colors.red)
-                    : Colors.green,
-                shape: const StadiumBorder(),
-              ),
-              onPressed: (isReadyToCheck && !_isSentenceAnswered)
-                  ? () {
-                      bool isCorrect =
-                          _assembledWords.join(' ') == task.sentence;
-                      setState(() {
-                        _isSentenceAnswered = true;
-                        if (isCorrect) _score++;
-                      });
-                      _playFeedbackSound(isCorrect, task.type);
-                      Future.delayed(
-                        const Duration(milliseconds: 1500),
-                        _nextQuestion,
-                      );
-                    }
-                  : null,
-              child: Text(
-                _isSentenceAnswered
-                    ? (_assembledWords.join(' ') == task.sentence
-                          ? "correct".tr()
-                          : "incorrect".tr())
-                    : "check_button".tr(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
+  if (task.type == 'writing') {
+    if (_isAdvancedWritingLevel) {
+      final isReadyToCheck = _areAllGapsFilled();
+      final isCorrect =
+          _isWritingAnswered ? _isWritingAnswerCorrect(task) : false;
 
-    if (task.type == 'speaking') {
       return Padding(
         padding: const EdgeInsets.all(24),
         child: SizedBox(
@@ -852,17 +999,32 @@ Widget _buildHighlightedQuestion(String text) {
           height: 54,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
+              backgroundColor: _isWritingAnswered
+                  ? (isCorrect ? Colors.green : Colors.red)
+                  : Colors.green,
               shape: const StadiumBorder(),
             ),
-            onPressed: _hasUserRecording
+            onPressed: (isReadyToCheck && !_isWritingAnswered)
                 ? () {
-                    _score++;
-                    _nextQuestion();
+                    final result = _isWritingAnswerCorrect(task);
+
+                    setState(() {
+                      _isWritingAnswered = true;
+                      if (result) _score++;
+                    });
+
+                    _playFeedbackSound(result, task.type);
+
+                    Future.delayed(
+                      const Duration(milliseconds: 1500),
+                      _nextQuestion,
+                    );
                   }
                 : null,
             child: Text(
-              "next".tr(),
+              _isWritingAnswered
+                  ? (isCorrect ? "correct".tr() : "incorrect".tr())
+                  : "check_button".tr(),
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 18,
@@ -874,26 +1036,59 @@ Widget _buildHighlightedQuestion(String text) {
       );
     }
 
-    if (_isMcqAnswered) {
-      bool isCorrect = _selectedAnswerIndex == task.correctAnswerIndex;
-      return AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        color: isCorrect ? Colors.green : Colors.red,
-        child: Text(
-          isCorrect ? "correct".tr() : "incorrect".tr(),
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
+    bool isReadyToCheck = _wordBank.isEmpty;
+    final isCorrect = _assembledWords.join(' ') == task.sentence;
+
+    return AnimatedOpacity(
+      opacity: isReadyToCheck ? 1.0 : 0.0,
+      duration: const Duration(milliseconds: 300),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: SizedBox(
+          width: double.infinity,
+          height: 54,
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _isSentenceAnswered
+                  ? (isCorrect ? Colors.green : Colors.red)
+                  : Colors.green,
+              shape: const StadiumBorder(),
+            ),
+            onPressed: (isReadyToCheck && !_isSentenceAnswered)
+                ? () {
+                    final result = _assembledWords.join(' ') == task.sentence;
+
+                    setState(() {
+                      _isSentenceAnswered = true;
+                      if (result) _score++;
+                    });
+
+                    _playFeedbackSound(result, task.type);
+
+                    Future.delayed(
+                      const Duration(milliseconds: 1500),
+                      _nextQuestion,
+                    );
+                  }
+                : null,
+            child: Text(
+              _isSentenceAnswered
+                  ? (isCorrect ? "correct".tr() : "incorrect".tr())
+                  : "check_button".tr(),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ),
-      );
-    }
-    return const SizedBox(height: 20);
+      ),
+    );
   }
+
+  return const SizedBox.shrink();
+}
 
   void _playFeedbackSound(bool isCorrect, String taskType) async {
     if (taskType == 'speaking') return;
