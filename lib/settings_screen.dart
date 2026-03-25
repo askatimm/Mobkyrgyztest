@@ -108,7 +108,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       padding: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.grey.shade200.withValues(alpha: 0.95), // Сделали контейнеры чуть прозрачными
+        color: const Color.fromARGB(255, 215, 218, 243).withValues(alpha: 0.95), // Сделали контейнеры чуть прозрачными
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(

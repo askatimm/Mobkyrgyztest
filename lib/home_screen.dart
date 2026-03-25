@@ -111,7 +111,7 @@ class _BubbleBottomBar extends StatelessWidget {
                 width: 68,
                 height: 68,
                 decoration: BoxDecoration(
-                  color: const Color.fromARGB(255, 131, 111, 231),
+                  color: const Color.fromARGB(255, 71, 174, 234),
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
