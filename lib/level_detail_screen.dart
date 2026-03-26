@@ -77,9 +77,37 @@ class LevelDetailScreen extends StatelessWidget {
     // Картинки берем из локальных ассетов
     switch (levelId) {
       case 'level_a1':
-        return 'assets/images/a1.png';
+        return 'assets/images/a1.webp';
       default:
-        return 'assets/images/a1.png';
+        return 'assets/images/a1.webp';
+    }
+  }
+
+  String _getInstructionKey(String subTestId) {
+    if (subTestId == 'writing') {
+      switch (levelId) {
+        case 'level_b1':
+          return 'writing_instruction_b1';
+        case 'level_b2':
+          return 'writing_instruction_b2';
+        case 'level_c1':
+          return 'writing_instruction_c1';
+        default:
+          return 'writing_instructions';
+      }
+    }
+
+    switch (subTestId) {
+      case 'lexica_grammatica':
+        return 'lex_gram_instructions';
+      case 'listening':
+        return 'listening_instructions';
+      case 'reading':
+        return 'reading_instructions';
+      case 'speaking':
+        return 'speaking_instructions';
+      default:
+        return 'writing_instructions';
     }
   }
 
@@ -104,25 +132,25 @@ class LevelDetailScreen extends StatelessWidget {
               children: [
                 const SizedBox(height: 6),
                 Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.circular(14), 
-                  ),
-                  child: Text(
-                    '${levelId}_title'.tr(),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black.withValues(alpha: 0.6),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.6),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      '${levelId}_title'.tr(),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black.withValues(alpha: 0.6),
+                      ),
                     ),
                   ),
-                ),
                 ),
 
                 Expanded(
@@ -152,7 +180,6 @@ class LevelDetailScreen extends StatelessWidget {
                                   'lex_grammar',
                                   context,
                                   'lexica_grammatica',
-                                  'lex_gram_instructions',
                                 ),
 
                                 _menuItem(
@@ -160,7 +187,6 @@ class LevelDetailScreen extends StatelessWidget {
                                   'listening',
                                   context,
                                   'listening',
-                                  'listening_instructions',
                                 ),
 
                                 _menuItem(
@@ -168,15 +194,13 @@ class LevelDetailScreen extends StatelessWidget {
                                   'reading',
                                   context,
                                   'reading',
-                                  'reading_instructions',
                                 ),
 
                                 _menuItem(
                                   Icons.chat_bubble_outline,
                                   'speaking',
                                   context,
-                                  'speaking', // с пробелом в конце
-                                  'speaking_instructions',
+                                  'speaking',
                                 ),
 
                                 _menuItem(
@@ -184,7 +208,6 @@ class LevelDetailScreen extends StatelessWidget {
                                   'writing',
                                   context,
                                   'writing',
-                                  'writing_instructions',
                                 ),
                               ],
                             ),
@@ -226,7 +249,6 @@ class LevelDetailScreen extends StatelessWidget {
     String textKey,
     BuildContext context,
     String subTestId,
-    String instrKey,
   ) {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 5),
@@ -250,7 +272,9 @@ class LevelDetailScreen extends StatelessWidget {
                 levelId: levelId,
                 subTestId: subTestId,
                 subTestTitle: textKey.tr(),
-                instructionKey: instrKey, // Используем ключ из твоего JSON
+                instructionKey: _getInstructionKey(
+                  subTestId,
+                ), // Используем ключ из твоего JSON
               ),
             ),
           );

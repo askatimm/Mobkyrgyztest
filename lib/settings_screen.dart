@@ -138,7 +138,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         height: double.infinity,
         decoration: BoxDecoration(
           image: DecorationImage(
-            image: const AssetImage('assets/images/bg_sett.png'), // Ваш фоновый рисунок
+            image: const AssetImage('assets/images/bg_sett.webp'), // Ваш фоновый рисунок
             fit: BoxFit.cover,
             colorFilter: ColorFilter.mode(
               Colors.white.withValues(alpha: 0.35), 

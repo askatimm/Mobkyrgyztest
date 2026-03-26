@@ -199,7 +199,7 @@ class HomeContent extends StatelessWidget {
       children: [
         Positioned.fill(
           child: Image.asset(
-            'assets/images/mountain1.png',
+            'assets/images/mountain1.webp',
             fit: BoxFit.cover,
           ),
         ),
@@ -237,7 +237,7 @@ class HomeContent extends StatelessWidget {
                       Expanded(
                         child: _buildLevelCard(
                           context,
-                          imagePath: 'assets/images/level_a1.png',
+                          imagePath: 'assets/images/level_a1.webp',
                           title: 'levels.a1'.tr(),
                           levelId: 'level_a1',
                           height: squareHeight,
@@ -247,7 +247,7 @@ class HomeContent extends StatelessWidget {
                       Expanded(
                         child: _buildLevelCard(
                           context,
-                          imagePath: 'assets/images/level_b2.png',
+                          imagePath: 'assets/images/level_b2.webp',
                           title: 'levels.a2'.tr(),
                           levelId: 'level_a2',
                           height: squareHeight,
@@ -261,7 +261,7 @@ class HomeContent extends StatelessWidget {
                       Expanded(
                         child: _buildLevelCard(
                           context,
-                          imagePath: 'assets/images/level_b1.png',
+                          imagePath: 'assets/images/level_b1.webp',
                           title: 'levels.b1'.tr(),
                           levelId: 'level_b1',
                           height: squareHeight,
@@ -271,7 +271,7 @@ class HomeContent extends StatelessWidget {
                       Expanded(
                         child: _buildLevelCard(
                           context,
-                          imagePath: 'assets/images/level_a2.png',
+                          imagePath: 'assets/images/level_a2.webp',
                           title: 'levels.b2'.tr(),
                           levelId: 'level_b2',
                           height: squareHeight,
@@ -282,7 +282,7 @@ class HomeContent extends StatelessWidget {
                   SizedBox(height: gap),
                   _buildLevelCard(
                     context,
-                    imagePath: 'assets/images/level_c1.png',
+                    imagePath: 'assets/images/level_c1.webp',
                     title: 'levels.c1'.tr(),
                     levelId: 'level_c1',
                     height: wideHeight,

@@ -29,7 +29,7 @@ class LanguageSelectionScreen extends StatelessWidget {
       body: Container(
         decoration: const BoxDecoration(
           image: DecorationImage(
-            image: AssetImage('assets/images/mountain_language.png'),
+            image: AssetImage('assets/images/mountain_language.webp'),
             fit: BoxFit.cover,
           ),
         ),
