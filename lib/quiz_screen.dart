@@ -55,8 +55,8 @@ class QuizTask {
       correctAnswerIndex: data['correctAnswerIndex'] ?? 0,
       parts: data['parts'] as List<dynamic>?,
       answers: data['answers'] != null
-        ? List<String>.from(data['answers'])
-        : null,
+          ? List<String>.from(data['answers'])
+          : null,
     );
   }
 }
@@ -82,6 +82,10 @@ class _QuizScreenState extends State<QuizScreen> {
   List<QuizTask> _tasks = [];
   int _currentIndex = 0;
   int _score = 0;
+  List<bool?> _gapResults = [];
+  final List<Map<String, String>> _writingMistakes = [];
+  int _totalWritingGaps = 0;
+  int _correctWritingGaps = 0;
 
   final TextEditingController _writingController = TextEditingController();
 
@@ -90,9 +94,7 @@ class _QuizScreenState extends State<QuizScreen> {
 
   bool get _isAdvancedWritingLevel {
     final level = widget.levelId.toLowerCase();
-    return level == 'level_b1' ||
-        level == 'level_b2' ||
-        level == 'level_c1';
+    return level == 'level_b1' || level == 'level_b2' || level == 'level_c1';
   }
 
   int _getTaskLimit() {
@@ -182,7 +184,6 @@ class _QuizScreenState extends State<QuizScreen> {
     _gapControllers.clear();
   }
 
-
   Future<List<QuizTask>> _loadTasks() async {
     final snapshot = await FirebaseFirestore.instance
         .collection('levels')
@@ -206,49 +207,49 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   void _prepareCurrentTask() {
-  if (_tasks.isEmpty) return;
+    if (_tasks.isEmpty) return;
 
-  final task = _tasks[_currentIndex];
+    final task = _tasks[_currentIndex];
 
-  _isMcqAnswered = false;
-  _selectedAnswerIndex = null;
-  _isSentenceAnswered = false;
-  _isWritingAnswered = false;
+    _isMcqAnswered = false;
+    _selectedAnswerIndex = null;
+    _isSentenceAnswered = false;
+    _isWritingAnswered = false;
 
-  _disposeGapControllers();
+    _disposeGapControllers();
 
-  _wordBank = [];
-  _assembledWords = [];
-  _correctFirstWord = "";
-  _hasUserRecording = false;
-  _userRecordingPath = null;
-  _isPlaying = false;
+    _wordBank = [];
+    _assembledWords = [];
+    _correctFirstWord = "";
+    _hasUserRecording = false;
+    _userRecordingPath = null;
+    _isPlaying = false;
 
-  _currentlyLoadedAudioUrl = null;
-  _audioPlayer.stop();
+    _currentlyLoadedAudioUrl = null;
+    _audioPlayer.stop();
 
-  if (task.type == 'writing') {
-    if (_isAdvancedWritingLevel) {
-      final count = task.answers?.length ?? 0;
-      _gapControllers =
-          List.generate(count, (_) => TextEditingController());
-    } else if (task.sentence != null) {
-      final words = task.sentence!
-          .trim()
-          .split(' ')
-          .where((w) => w.isNotEmpty)
-          .toList();
+    if (task.type == 'writing') {
+      if (_isAdvancedWritingLevel) {
+        final count = task.answers?.length ?? 0;
+        _gapControllers = List.generate(count, (_) => TextEditingController());
+        _gapResults = List.generate(count, (_) => null);
+      } else if (task.sentence != null) {
+        final words = task.sentence!
+            .trim()
+            .split(' ')
+            .where((w) => w.isNotEmpty)
+            .toList();
 
-      if (words.isNotEmpty) {
-        _correctFirstWord = words.first;
-        _wordBank = List.from(words)..shuffle();
+        if (words.isNotEmpty) {
+          _correctFirstWord = words.first;
+          _wordBank = List.from(words)..shuffle();
+        }
       }
+    } else if (task.audioUrl != null && task.audioUrl!.isNotEmpty) {
+      _loadAudio(task.audioUrl!);
     }
-  } else if (task.audioUrl != null && task.audioUrl!.isNotEmpty) {
-    _loadAudio(task.audioUrl!);
   }
-}
- 
+
   String _normalizeAnswer(String value) {
     return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
   }
@@ -258,83 +259,143 @@ class _QuizScreenState extends State<QuizScreen> {
     return _gapControllers.every((c) => c.text.trim().isNotEmpty);
   }
 
-  Widget _buildLetterBoxesField(
-  TextEditingController controller,
-  int boxCount,
-) {
-  const double boxWidth = 20;
-  const double boxHeight = 28;
-  const double gap = 3;
+  void _checkWritingAnswersPerGap(QuizTask task) {
+    final correctAnswers = task.answers ?? [];
 
-  return SizedBox(
-    width: boxCount * (boxWidth + gap),
-    child: Stack(
-      alignment: Alignment.centerLeft,
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: List.generate(
-            boxCount,
-            (index) => Container(
-              width: boxWidth,
-              height: boxHeight,
-              margin: const EdgeInsets.only(right: gap),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade400),
-                borderRadius: BorderRadius.circular(5),
-                color: Colors.white,
+    _gapResults = List.generate(correctAnswers.length, (i) {
+      return _normalizeAnswer(_gapControllers[i].text) ==
+          _normalizeAnswer(correctAnswers[i]);
+    });
+  }
+
+  void _collectWritingMistakes(QuizTask task) {
+    final correctAnswers = task.answers ?? [];
+
+    for (int i = 0; i < correctAnswers.length; i++) {
+      final userText = _gapControllers[i].text.trim();
+      final correctText = correctAnswers[i].trim();
+
+      _totalWritingGaps++;
+
+      if (_normalizeAnswer(userText) == _normalizeAnswer(correctText)) {
+        _correctWritingGaps++;
+      } else {
+        _writingMistakes.add({
+          'user': userText.isEmpty ? '—' : userText,
+          'correct': correctText,
+        });
+      }
+    }
+  }
+
+  Widget _buildLetterBoxesField(
+    TextEditingController controller,
+    int boxCount,
+    int gapIndex,
+  ) {
+    const double boxWidth = 18;
+    const double boxHeight = 24;
+    const double gap = 2;
+
+    Color borderColor = Colors.grey.shade400;
+
+    if (_isWritingAnswered && gapIndex < _gapResults.length) {
+      final result = _gapResults[gapIndex];
+      if (result == true) {
+        borderColor = Colors.green;
+      } else if (result == false) {
+        borderColor = Colors.red;
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Stack(
+            alignment: Alignment.centerLeft,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(
+                  boxCount,
+                  (index) => Container(
+                    width: boxWidth,
+                    height: boxHeight,
+                    margin: const EdgeInsets.only(right: gap),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: borderColor),
+                      borderRadius: BorderRadius.circular(5),
+                      color: Colors.white,
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      index < controller.text.length
+                          ? controller.text[index]
+                          : '',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
               ),
-              alignment: Alignment.center,
+              Opacity(
+                opacity: 0.01,
+                child: SizedBox(
+                  width: boxCount * (boxWidth + gap),
+                  child: TextField(
+                    controller: controller,
+                    enabled: !_isWritingAnswered,
+                    maxLength: boxCount,
+                    onChanged: (_) {
+                      setState(() {});
+                    },
+                    decoration: const InputDecoration(
+                      counterText: '',
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
+                      isDense: true,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          if (_isWritingAnswered &&
+              gapIndex < _gapResults.length &&
+              _gapResults[gapIndex] == false)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
               child: Text(
-                index < controller.text.length
-                    ? controller.text[index]
-                    : '',
+                '✓ ${_tasks[_currentIndex].answers![gapIndex]}',
                 style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
+                  fontSize: 11,
+                  color: Colors.green,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
-          ),
-        ),
-        Opacity(
-          opacity: 0.01,
-          child: SizedBox(
-            width: boxCount * (boxWidth + gap),
-            child: TextField(
-              controller: controller,
-              enabled: !_isWritingAnswered,
-              maxLength: boxCount,
-              onChanged: (_) {
-                setState(() {});
-              },
-              decoration: const InputDecoration(
-                counterText: '',
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
-              ),
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
 
   bool _isWritingAnswerCorrect(QuizTask task) {
-  final correctAnswers = task.answers ?? [];
-  if (correctAnswers.length != _gapControllers.length) return false;
+    final correctAnswers = task.answers ?? [];
+    if (correctAnswers.length != _gapControllers.length) return false;
 
-  for (int i = 0; i < correctAnswers.length; i++) {
-    if (_normalizeAnswer(_gapControllers[i].text) !=
-        _normalizeAnswer(correctAnswers[i])) {
-      return false;
+    for (int i = 0; i < correctAnswers.length; i++) {
+      if (_normalizeAnswer(_gapControllers[i].text) !=
+          _normalizeAnswer(correctAnswers[i])) {
+        return false;
+      }
     }
+    return true;
   }
-  return true;
-}
-
-
 
   Future<void> _loadAudio(String url) async {
     if (url.isEmpty || url == _currentlyLoadedAudioUrl) {
@@ -414,19 +475,47 @@ class _QuizScreenState extends State<QuizScreen> {
     );
   }
 
+  Widget _buildHighlightedQuestion(String text) {
+    final RegExp exp = RegExp(r'\*\*(.*?)\*\*');
+    final List<TextSpan> spans = [];
 
-Widget _buildHighlightedQuestion(String text) {
-  final RegExp exp = RegExp(r'\*\*(.*?)\*\*');
-  final List<TextSpan> spans = [];
+    int currentIndex = 0;
+    final matches = exp.allMatches(text);
 
-  int currentIndex = 0;
-  final matches = exp.allMatches(text);
+    for (final match in matches) {
+      if (match.start > currentIndex) {
+        spans.add(
+          TextSpan(
+            text: text.substring(currentIndex, match.start),
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+              height: 1.35,
+            ),
+          ),
+        );
+      }
 
-  for (final match in matches) {
-    if (match.start > currentIndex) {
       spans.add(
         TextSpan(
-          text: text.substring(currentIndex, match.start),
+          text: match.group(1),
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: Colors.blue,
+            height: 1.35,
+          ),
+        ),
+      );
+
+      currentIndex = match.end;
+    }
+
+    if (currentIndex < text.length) {
+      spans.add(
+        TextSpan(
+          text: text.substring(currentIndex),
           style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.bold,
@@ -437,40 +526,11 @@ Widget _buildHighlightedQuestion(String text) {
       );
     }
 
-    spans.add(
-      TextSpan(
-        text: match.group(1),
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.bold,
-          color: Colors.blue,
-          height: 1.35,
-        ),
-      ),
-    );
-
-    currentIndex = match.end;
-  }
-
-  if (currentIndex < text.length) {
-    spans.add(
-      TextSpan(
-        text: text.substring(currentIndex),
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.bold,
-          color: Colors.black87,
-          height: 1.35,
-        ),
-      ),
+    return RichText(
+      textAlign: TextAlign.center,
+      text: TextSpan(children: spans),
     );
   }
-
-  return RichText(
-    textAlign: TextAlign.center,
-    text: TextSpan(children: spans),
-  );
-}
 
   @override
   Widget build(BuildContext context) {
@@ -577,157 +637,168 @@ Widget _buildHighlightedQuestion(String text) {
     }
   }
 
-  // --- 1. UI: Writing (Жазуу) ---
-  Widget _buildWritingUI(QuizTask task) {
-  if (_isAdvancedWritingLevel) {
+  List<Widget> _buildInlineWritingWidgets(QuizTask task) {
     final parts = task.parts ?? [];
     final answers = task.answers ?? [];
+    final List<Widget> widgets = [];
     int gapIndex = 0;
+
+    for (final part in parts) {
+      if (part == null) {
+        final currentGap = gapIndex;
+        final boxCount = answers[currentGap].length;
+        gapIndex++;
+
+        widgets.add(
+          _buildLetterBoxesField(
+            _gapControllers[currentGap],
+            boxCount,
+            currentGap,
+          ),
+        );
+      } else {
+        final text = part.toString();
+        final words = text.split(RegExp(r'(\s+)'));
+
+        for (final word in words) {
+          if (word.isEmpty) continue;
+
+          widgets.add(
+            Text(
+              word,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                height: 1.5,
+              ),
+            ),
+          );
+        }
+      }
+    }
+
+    return widgets;
+  }
+
+  // --- 1. UI: Writing (Жазуу) ---
+  Widget _buildWritingUI(QuizTask task) {
+    if (_isAdvancedWritingLevel) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            task.question,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 20),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.blue.shade200, width: 2),
+            ),
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 2,
+              runSpacing: 10,
+              children: _buildInlineWritingWidgets(task),
+            ),
+          ),
+        ],
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          task.question,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                task.question,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.lightbulb, color: Colors.orange),
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      "hint_first_word".tr(args: [_correctFirstWord]),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
         ),
         const SizedBox(height: 20),
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(14),
+          constraints: const BoxConstraints(minHeight: 120),
+          padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.blue.shade200, width: 2),
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade300),
           ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              return Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 2,
-                runSpacing: 10,
-                children: parts.map((part) {
-                  if (part == null) {
-                    final currentGap = gapIndex;
-                    final boxCount = answers[currentGap].length;
-                    gapIndex++;
-
-                    return _buildLetterBoxesField(
-                      _gapControllers[currentGap],
-                      boxCount,
-                    );
-                  }
-
-                  return Text(
-                    part.toString(),
-                    softWrap: true,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      height: 1.4,
-                    ),
-                  );
-                }).toList(),
-              );
-            },
+          child: Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            alignment: WrapAlignment.center,
+            runAlignment: WrapAlignment.center,
+            children: _assembledWords
+                .asMap()
+                .entries
+                .map(
+                  (e) => ActionChip(
+                    label: Text(e.value),
+                    onPressed: _isSentenceAnswered
+                        ? null
+                        : () {
+                            setState(() {
+                              _wordBank.add(e.value);
+                              _assembledWords.removeAt(e.key);
+                            });
+                          },
+                  ),
+                )
+                .toList(),
           ),
         ),
-      ],
-    );
-  }
-
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Row(
-        children: [
-          Expanded(
-            child: Text(
-              task.question,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.lightbulb, color: Colors.orange),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text("hint_first_word".tr(args: [_correctFirstWord])),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-      const SizedBox(height: 20),
-
-      Container(
-        width: double.infinity,
-        constraints: const BoxConstraints(minHeight: 120),
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade300),
-        ),
-        child: Wrap(
+        const SizedBox(height: 40),
+        Wrap(
           spacing: 10,
           runSpacing: 10,
           alignment: WrapAlignment.center,
-          runAlignment: WrapAlignment.center,
-          children: _assembledWords
+          children: _wordBank
               .asMap()
               .entries
               .map(
                 (e) => ActionChip(
                   label: Text(e.value),
+                  backgroundColor: Colors.blue.shade50,
                   onPressed: _isSentenceAnswered
                       ? null
                       : () {
                           setState(() {
-                            _wordBank.add(e.value);
-                            _assembledWords.removeAt(e.key);
+                            _assembledWords.add(e.value);
+                            _wordBank.removeAt(e.key);
                           });
                         },
                 ),
               )
               .toList(),
         ),
-      ),
-      const SizedBox(height: 40),
-
-      Wrap(
-        spacing: 10,
-        runSpacing: 10,
-        alignment: WrapAlignment.center,
-        children: _wordBank
-            .asMap()
-            .entries
-            .map(
-              (e) => ActionChip(
-                label: Text(e.value),
-                backgroundColor: Colors.blue.shade50,
-                onPressed: _isSentenceAnswered
-                    ? null
-                    : () {
-                        setState(() {
-                          _assembledWords.add(e.value);
-                          _wordBank.removeAt(e.key);
-                        });
-                      },
-              ),
-            )
-            .toList(),
-      ),
-    ],
-  );
-}
+      ],
+    );
+  }
 
   // --- 2. UI: Speaking (Сүйлөө) ---
   Widget _buildSpeakingUI(QuizTask task) {
@@ -978,57 +1049,118 @@ Widget _buildHighlightedQuestion(String text) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (c) =>
-              QuizResultScreen(score: _score, totalQuestions: _tasks.length),
+          builder: (context) => QuizResultScreen(
+            score: _score,
+            totalQuestions: _tasks.length,
+            writingMistakes: _writingMistakes,
+            totalWritingGaps: _totalWritingGaps,
+            correctWritingGaps: _correctWritingGaps,
+            isAdvancedWriting: _isAdvancedWritingLevel,
+          ),
         ),
       );
     }
   }
 
   Widget _buildBottomAction(QuizTask task) {
-  if (task.type == 'writing') {
-    if (_isAdvancedWritingLevel) {
-      final isReadyToCheck = _areAllGapsFilled();
-      final isCorrect =
-          _isWritingAnswered ? _isWritingAnswerCorrect(task) : false;
+    if (task.type == 'writing') {
+      if (_isAdvancedWritingLevel) {
+        final isReadyToCheck = _areAllGapsFilled();
+        final isCorrect = _isWritingAnswered
+            ? _isWritingAnswerCorrect(task)
+            : false;
 
-      return Padding(
-        padding: const EdgeInsets.all(24),
-        child: SizedBox(
-          width: double.infinity,
-          height: 54,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _isWritingAnswered
-                  ? (isCorrect ? Colors.green : Colors.red)
-                  : Colors.green,
-              shape: const StadiumBorder(),
+        return Padding(
+          padding: const EdgeInsets.all(24),
+          child: SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _isWritingAnswered
+                    ? (isCorrect ? Colors.green : Colors.red)
+                    : Colors.green,
+                shape: const StadiumBorder(),
+              ),
+              onPressed: (isReadyToCheck && !_isWritingAnswered)
+                  ? () {
+                      _checkWritingAnswersPerGap(task);
+                      _collectWritingMistakes(task);
+
+                      final result = _gapResults.every((e) => e == true);
+
+                      setState(() {
+                        _isWritingAnswered = true;
+                        if (result) _score++;
+                      });
+
+                      _playFeedbackSound(result, task.type);
+
+                      Future.delayed(
+                        const Duration(milliseconds: 4000),
+                        _nextQuestion,
+                      );
+                    }
+                  : null,
+              child: Text(
+                _isWritingAnswered
+                    ? (isCorrect ? "correct".tr() : "incorrect".tr())
+                    : "check_button".tr(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
-            onPressed: (isReadyToCheck && !_isWritingAnswered)
-                ? () {
-                    final result = _isWritingAnswerCorrect(task);
+          ),
+        );
+      }
 
-                    setState(() {
-                      _isWritingAnswered = true;
-                      if (result) _score++;
-                    });
+      bool isReadyToCheck = _wordBank.isEmpty;
+      final isCorrect = _assembledWords.join(' ') == task.sentence;
 
-                    _playFeedbackSound(result, task.type);
+      return AnimatedOpacity(
+        opacity: isReadyToCheck ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 300),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _isSentenceAnswered
+                    ? (isCorrect ? Colors.green : Colors.red)
+                    : Colors.green,
+                shape: const StadiumBorder(),
+              ),
+              onPressed: (isReadyToCheck && !_isSentenceAnswered)
+                  ? () {
+                      final result = _assembledWords.join(' ') == task.sentence;
 
-                    Future.delayed(
-                      const Duration(milliseconds: 1500),
-                      _nextQuestion,
-                    );
-                  }
-                : null,
-            child: Text(
-              _isWritingAnswered
-                  ? (isCorrect ? "correct".tr() : "incorrect".tr())
-                  : "check_button".tr(),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+                      setState(() {
+                        _isSentenceAnswered = true;
+                        if (result) _score++;
+                      });
+
+                      _playFeedbackSound(result, task.type);
+
+                      Future.delayed(
+                        const Duration(milliseconds: 1500),
+                        _nextQuestion,
+                      );
+                    }
+                  : null,
+              child: Text(
+                _isSentenceAnswered
+                    ? (isCorrect ? "correct".tr() : "incorrect".tr())
+                    : "check_button".tr(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
@@ -1036,59 +1168,8 @@ Widget _buildHighlightedQuestion(String text) {
       );
     }
 
-    bool isReadyToCheck = _wordBank.isEmpty;
-    final isCorrect = _assembledWords.join(' ') == task.sentence;
-
-    return AnimatedOpacity(
-      opacity: isReadyToCheck ? 1.0 : 0.0,
-      duration: const Duration(milliseconds: 300),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: SizedBox(
-          width: double.infinity,
-          height: 54,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _isSentenceAnswered
-                  ? (isCorrect ? Colors.green : Colors.red)
-                  : Colors.green,
-              shape: const StadiumBorder(),
-            ),
-            onPressed: (isReadyToCheck && !_isSentenceAnswered)
-                ? () {
-                    final result = _assembledWords.join(' ') == task.sentence;
-
-                    setState(() {
-                      _isSentenceAnswered = true;
-                      if (result) _score++;
-                    });
-
-                    _playFeedbackSound(result, task.type);
-
-                    Future.delayed(
-                      const Duration(milliseconds: 1500),
-                      _nextQuestion,
-                    );
-                  }
-                : null,
-            child: Text(
-              _isSentenceAnswered
-                  ? (isCorrect ? "correct".tr() : "incorrect".tr())
-                  : "check_button".tr(),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+    return const SizedBox.shrink();
   }
-
-  return const SizedBox.shrink();
-}
 
   void _playFeedbackSound(bool isCorrect, String taskType) async {
     if (taskType == 'speaking') return;
