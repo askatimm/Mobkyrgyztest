@@ -1,7 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'quiz_instructions_screen.dart'; // Проверь путь к файлу
+import 'quiz_instructions_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Проверь путь к файлу
 
 class VolumeBackButton extends StatefulWidget {
   final String text;
@@ -109,6 +110,19 @@ class LevelDetailScreen extends StatelessWidget {
       default:
         return 'writing_instructions';
     }
+  }
+
+  Future<bool> _hasTasks(String subTestId) async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('levels')
+        .doc(levelId)
+        .collection('sub_tests')
+        .doc(subTestId)
+        .collection('tasks')
+        .limit(1)
+        .get();
+
+    return snapshot.docs.isNotEmpty;
   }
 
   @override
@@ -250,36 +264,60 @@ class LevelDetailScreen extends StatelessWidget {
     BuildContext context,
     String subTestId,
   ) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 5),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: ListTile(
-        leading: Icon(icon, color: Colors.green[700], size: 26),
-        title: Text(
-          textKey.tr(),
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-        ),
-        trailing: const Icon(Icons.chevron_right, size: 20),
-        onTap: () {
-          // ПЕРЕХОДИМ СРАЗУ В ИНСТРУКЦИИ
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => QuizInstructionsScreen(
-                levelId: levelId,
-                subTestId: subTestId,
-                subTestTitle: textKey.tr(),
-                instructionKey: _getInstructionKey(
-                  subTestId,
-                ), // Используем ключ из твоего JSON
+    return FutureBuilder<bool>(
+      future: _hasTasks(subTestId),
+      builder: (context, snapshot) {
+        final bool isLocked = !(snapshot.data ?? false);
+
+        return Container(
+          margin: const EdgeInsets.symmetric(vertical: 5),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: isLocked ? 0.65 : 0.85),
+            borderRadius: BorderRadius.circular(15),
+          ),
+          child: ListTile(
+            leading: Icon(
+              icon,
+              color: isLocked ? Colors.grey : Colors.green[700],
+              size: 26,
+            ),
+            title: Text(
+              textKey.tr(),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: isLocked ? Colors.grey[600] : Colors.black,
               ),
             ),
-          );
-        },
-      ),
+            trailing: snapshot.connectionState == ConnectionState.waiting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    isLocked ? Icons.lock_outline : Icons.chevron_right,
+                    size: 20,
+                    color: isLocked ? Colors.grey : Colors.black54,
+                  ),
+            onTap: isLocked
+                ? null
+                : () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => QuizInstructionsScreen(
+                          levelId: levelId,
+                          subTestId: subTestId,
+                          subTestTitle: textKey.tr(),
+                          instructionKey: _getInstructionKey(subTestId),
+                        ),
+                      ),
+                    );
+                  },
+          ),
+        );
+      },
     );
   }
 }

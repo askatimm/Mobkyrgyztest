@@ -23,6 +23,7 @@ class QuizTask {
   final int correctAnswerIndex;
   final List<dynamic>? parts;
   final List<String>? answers;
+  final List<String>? hints;
 
   QuizTask({
     required this.id,
@@ -33,6 +34,7 @@ class QuizTask {
     this.correctText,
     this.parts,
     this.answers,
+    this.hints,
     required this.type,
     required this.question,
     required this.options,
@@ -53,10 +55,11 @@ class QuizTask {
       question: data['question'] ?? '',
       options: List<String>.from(data['options'] ?? []),
       correctAnswerIndex: data['correctAnswerIndex'] ?? 0,
-      parts: data['parts'] as List<dynamic>?,
+      parts: data['parts'] is List ? List<dynamic>.from(data['parts']) : null,
       answers: data['answers'] != null
           ? List<String>.from(data['answers'])
           : null,
+      hints: data['hints'] is List ? List<String>.from(data['hints']) : null,
     );
   }
 }
@@ -254,6 +257,15 @@ class _QuizScreenState extends State<QuizScreen> {
     return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
   }
 
+  String _getFullUserAnswer(int index) {
+  final task = _tasks[_currentIndex];
+  final hint = (task.hints != null && index < task.hints!.length)
+      ? task.hints![index]
+      : '';
+
+  return '$hint${_gapControllers[index].text}';
+}
+
   bool _areAllGapsFilled() {
     if (_gapControllers.isEmpty) return false;
     return _gapControllers.every((c) => c.text.trim().isNotEmpty);
@@ -263,7 +275,7 @@ class _QuizScreenState extends State<QuizScreen> {
     final correctAnswers = task.answers ?? [];
 
     _gapResults = List.generate(correctAnswers.length, (i) {
-      return _normalizeAnswer(_gapControllers[i].text) ==
+      return _normalizeAnswer(_getFullUserAnswer(i)) ==
           _normalizeAnswer(correctAnswers[i]);
     });
   }
@@ -272,7 +284,7 @@ class _QuizScreenState extends State<QuizScreen> {
     final correctAnswers = task.answers ?? [];
 
     for (int i = 0; i < correctAnswers.length; i++) {
-      final userText = _gapControllers[i].text.trim();
+      final userText = _getFullUserAnswer(i).trim();
       final correctText = correctAnswers[i].trim();
 
       _totalWritingGaps++;
@@ -289,38 +301,51 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   Widget _buildLetterBoxesField(
-    TextEditingController controller,
-    int boxCount,
-    int gapIndex,
-  ) {
-    const double boxWidth = 18;
-    const double boxHeight = 24;
-    const double gap = 2;
+  TextEditingController controller,
+  int boxCount,
+  int gapIndex,
+  String hint,
+) {
+  const double boxWidth = 18;
+  const double boxHeight = 24;
+  const double gap = 2;
 
-    Color borderColor = Colors.grey.shade400;
+  Color borderColor = Colors.grey.shade400;
 
-    if (_isWritingAnswered && gapIndex < _gapResults.length) {
-      final result = _gapResults[gapIndex];
-      if (result == true) {
-        borderColor = Colors.green;
-      } else if (result == false) {
-        borderColor = Colors.red;
-      }
+  if (_isWritingAnswered && gapIndex < _gapResults.length) {
+    final result = _gapResults[gapIndex];
+    if (result == true) {
+      borderColor = Colors.green;
+    } else if (result == false) {
+      borderColor = Colors.red;
     }
+  }
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 2),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Stack(
-            alignment: Alignment.centerLeft,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: List.generate(
-                  boxCount,
-                  (index) => Container(
+  return Container(
+    margin: const EdgeInsets.symmetric(horizontal: 2),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Stack(
+          alignment: Alignment.centerLeft,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(
+                boxCount,
+                (index) {
+                  String displayChar = '';
+
+                  if (hint.isNotEmpty && index == 0) {
+                    displayChar = hint;
+                  } else {
+                    final textIndex = hint.isNotEmpty ? index - 1 : index;
+                    if (textIndex >= 0 && textIndex < controller.text.length) {
+                      displayChar = controller.text[textIndex];
+                    }
+                  }
+
+                  return Container(
                     width: boxWidth,
                     height: boxHeight,
                     margin: const EdgeInsets.only(right: gap),
@@ -331,65 +356,63 @@ class _QuizScreenState extends State<QuizScreen> {
                     ),
                     alignment: Alignment.center,
                     child: Text(
-                      index < controller.text.length
-                          ? controller.text[index]
-                          : '',
+                      displayChar,
                       style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
-              Opacity(
-                opacity: 0.01,
-                child: SizedBox(
-                  width: boxCount * (boxWidth + gap),
-                  child: TextField(
-                    controller: controller,
-                    enabled: !_isWritingAnswered,
-                    maxLength: boxCount,
-                    onChanged: (_) {
-                      setState(() {});
-                    },
-                    decoration: const InputDecoration(
-                      counterText: '',
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.zero,
-                      isDense: true,
-                    ),
+            ),
+            Opacity(
+              opacity: 0.01,
+              child: SizedBox(
+                width: boxCount * (boxWidth + gap),
+                child: TextField(
+                  controller: controller,
+                  enabled: !_isWritingAnswered,
+                  maxLength: hint.isNotEmpty ? boxCount - 1 : boxCount,
+                  onChanged: (_) {
+                    setState(() {});
+                  },
+                  decoration: const InputDecoration(
+                    counterText: '',
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
+                    isDense: true,
                   ),
-                ),
-              ),
-            ],
-          ),
-
-          if (_isWritingAnswered &&
-              gapIndex < _gapResults.length &&
-              _gapResults[gapIndex] == false)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                '✓ ${_tasks[_currentIndex].answers![gapIndex]}',
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: Colors.green,
-                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
-        ],
-      ),
-    );
-  }
+          ],
+        ),
+        if (_isWritingAnswered &&
+            gapIndex < _gapResults.length &&
+            _gapResults[gapIndex] == false)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              '✓ ${_tasks[_currentIndex].answers![gapIndex]}',
+              style: const TextStyle(
+                fontSize: 11,
+                color: Colors.green,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+}
 
   bool _isWritingAnswerCorrect(QuizTask task) {
     final correctAnswers = task.answers ?? [];
     if (correctAnswers.length != _gapControllers.length) return false;
 
     for (int i = 0; i < correctAnswers.length; i++) {
-      if (_normalizeAnswer(_gapControllers[i].text) !=
+      if (_normalizeAnswer(_getFullUserAnswer(i)) !=
           _normalizeAnswer(correctAnswers[i])) {
         return false;
       }
@@ -646,15 +669,19 @@ class _QuizScreenState extends State<QuizScreen> {
     for (final part in parts) {
       if (part == null) {
         final currentGap = gapIndex;
-        final boxCount = answers[currentGap].length;
+        final hint = task.hints?[currentGap] ?? '';
+        final fullAnswer = answers[currentGap];
+        final boxCount = fullAnswer.length;
         gapIndex++;
 
         widgets.add(
-          _buildLetterBoxesField(
-            _gapControllers[currentGap],
-            boxCount,
-            currentGap,
-          ),
+          
+              _buildLetterBoxesField(
+                _gapControllers[currentGap],
+                boxCount,
+                currentGap,
+                hint,
+              ),
         );
       } else {
         final text = part.toString();
