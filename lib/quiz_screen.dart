@@ -258,13 +258,13 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   String _getFullUserAnswer(int index) {
-  final task = _tasks[_currentIndex];
-  final hint = (task.hints != null && index < task.hints!.length)
-      ? task.hints![index]
-      : '';
+    final task = _tasks[_currentIndex];
+    final hint = (task.hints != null && index < task.hints!.length)
+        ? task.hints![index]
+        : '';
 
-  return '$hint${_gapControllers[index].text}';
-}
+    return '$hint${_gapControllers[index].text}';
+  }
 
   bool _areAllGapsFilled() {
     if (_gapControllers.isEmpty) return false;
@@ -301,39 +301,37 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   Widget _buildLetterBoxesField(
-  TextEditingController controller,
-  int boxCount,
-  int gapIndex,
-  String hint,
-) {
-  const double boxWidth = 18;
-  const double boxHeight = 24;
-  const double gap = 2;
+    TextEditingController controller,
+    int boxCount,
+    int gapIndex,
+    String hint,
+  ) {
+    const double boxWidth = 18;
+    const double boxHeight = 24;
+    const double gap = 2;
 
-  Color borderColor = Colors.grey.shade400;
+    Color borderColor = Colors.grey.shade400;
 
-  if (_isWritingAnswered && gapIndex < _gapResults.length) {
-    final result = _gapResults[gapIndex];
-    if (result == true) {
-      borderColor = Colors.green;
-    } else if (result == false) {
-      borderColor = Colors.red;
+    if (_isWritingAnswered && gapIndex < _gapResults.length) {
+      final result = _gapResults[gapIndex];
+      if (result == true) {
+        borderColor = Colors.green;
+      } else if (result == false) {
+        borderColor = Colors.red;
+      }
     }
-  }
 
-  return Container(
-    margin: const EdgeInsets.symmetric(horizontal: 2),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Stack(
-          alignment: Alignment.centerLeft,
-          children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: List.generate(
-                boxCount,
-                (index) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Stack(
+            alignment: Alignment.centerLeft,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(boxCount, (index) {
                   String displayChar = '';
 
                   if (hint.isNotEmpty && index == 0) {
@@ -363,49 +361,48 @@ class _QuizScreenState extends State<QuizScreen> {
                       ),
                     ),
                   );
-                },
+                }),
               ),
-            ),
-            Opacity(
-              opacity: 0.01,
-              child: SizedBox(
-                width: boxCount * (boxWidth + gap),
-                child: TextField(
-                  controller: controller,
-                  enabled: !_isWritingAnswered,
-                  maxLength: hint.isNotEmpty ? boxCount - 1 : boxCount,
-                  onChanged: (_) {
-                    setState(() {});
-                  },
-                  decoration: const InputDecoration(
-                    counterText: '',
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.zero,
-                    isDense: true,
+              Opacity(
+                opacity: 0.01,
+                child: SizedBox(
+                  width: boxCount * (boxWidth + gap),
+                  child: TextField(
+                    controller: controller,
+                    enabled: !_isWritingAnswered,
+                    maxLength: hint.isNotEmpty ? boxCount - 1 : boxCount,
+                    onChanged: (_) {
+                      setState(() {});
+                    },
+                    decoration: const InputDecoration(
+                      counterText: '',
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
+                      isDense: true,
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
-        if (_isWritingAnswered &&
-            gapIndex < _gapResults.length &&
-            _gapResults[gapIndex] == false)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              '✓ ${_tasks[_currentIndex].answers![gapIndex]}',
-              style: const TextStyle(
-                fontSize: 11,
-                color: Colors.green,
-                fontWeight: FontWeight.w600,
+            ],
+          ),
+          if (_isWritingAnswered &&
+              gapIndex < _gapResults.length &&
+              _gapResults[gapIndex] == false)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                '✓ ${_tasks[_currentIndex].answers![gapIndex]}',
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Colors.green,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
-          ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
 
   bool _isWritingAnswerCorrect(QuizTask task) {
     final correctAnswers = task.answers ?? [];
@@ -675,13 +672,12 @@ class _QuizScreenState extends State<QuizScreen> {
         gapIndex++;
 
         widgets.add(
-          
-              _buildLetterBoxesField(
-                _gapControllers[currentGap],
-                boxCount,
-                currentGap,
-                hint,
-              ),
+          _buildLetterBoxesField(
+            _gapControllers[currentGap],
+            boxCount,
+            currentGap,
+            hint,
+          ),
         );
       } else {
         final text = part.toString();
@@ -838,23 +834,39 @@ class _QuizScreenState extends State<QuizScreen> {
         ),
         Center(child: _buildAudioPlayerWidget()),
         const SizedBox(height: 10),
+
         Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.blue.shade50,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.blue.shade200),
-          ),
-          child: Text(
-            task.question,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-          ),
+  width: double.infinity,
+  constraints: const BoxConstraints(
+    minHeight: 80,
+    maxHeight: 180,
+  ),
+  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+  decoration: BoxDecoration(
+    color: Colors.blue.shade50,
+    borderRadius: BorderRadius.circular(16),
+    border: Border.all(color: Colors.blue.shade200),
+  ),
+  child: SingleChildScrollView(
+    child: Align(
+      alignment: Alignment.topCenter,
+      child: Text(
+        task.question,
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+          height: 1.4,
         ),
+      ),
+    ),
+  ),
+),
+
         const SizedBox(height: 10),
         _buildSmallLabel("answer".tr()),
         Center(child: _buildMicButton()),
+
         if (_hasUserRecording)
           Center(
             child: Padding(
@@ -1082,7 +1094,8 @@ class _QuizScreenState extends State<QuizScreen> {
             writingMistakes: _writingMistakes,
             totalWritingGaps: _totalWritingGaps,
             correctWritingGaps: _correctWritingGaps,
-            isAdvancedWriting: _isAdvancedWritingLevel,
+            isAdvancedWriting:
+              widget.subTestId == 'writing' && _isAdvancedWritingLevel,
           ),
         ),
       );
@@ -1090,6 +1103,31 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   Widget _buildBottomAction(QuizTask task) {
+    if (task.type == 'speaking') {
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: SizedBox(
+          width: double.infinity,
+          height: 54,
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              shape: const StadiumBorder(),
+            ),
+            onPressed: _hasUserRecording ? _nextQuestion : null,
+            child: Text(
+              "next".tr(),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     if (task.type == 'writing') {
       if (_isAdvancedWritingLevel) {
         final isReadyToCheck = _areAllGapsFilled();
