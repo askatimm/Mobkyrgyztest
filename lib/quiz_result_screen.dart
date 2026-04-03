@@ -174,17 +174,17 @@ class QuizResultScreen extends StatelessWidget {
                 const SizedBox(height: 16),
                 Expanded(
                   child: totalWritingGaps == 0
-    ? Center(
-        child: Text(
-          'Жооптор эсептелген жок',
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: Colors.orange,
-          ),
-        ),
-      )
-                  : writingMistakes.isEmpty
+                      ? Center(
+                          child: Text(
+                            'Жооптор эсептелген жок',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.orange,
+                            ),
+                          ),
+                        )
+                      : writingMistakes.isEmpty
                       ? Center(
                           child: Text(
                             'all_answers_correct'.tr(),

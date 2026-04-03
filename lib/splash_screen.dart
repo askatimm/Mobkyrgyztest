@@ -19,7 +19,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _startSplash() async {
     // Ждем 3 секунды
-    await Future.delayed(const Duration(seconds: 3));
+    await Future.delayed(const Duration(seconds: 2));
 
     final prefs = await SharedPreferences.getInstance();
     final bool isLanguageSelected =
