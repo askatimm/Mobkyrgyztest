@@ -8,6 +8,8 @@ import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'quiz_result_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/essay_review.dart';
+import '../services/ai_writing_service.dart';
 
 // --- Модель QuizTask ---
 class QuizTask {
@@ -24,6 +26,8 @@ class QuizTask {
   final List<dynamic>? parts;
   final List<String>? answers;
   final List<String>? hints;
+  final int order;
+  final bool isActive;
 
   QuizTask({
     required this.id,
@@ -39,10 +43,14 @@ class QuizTask {
     required this.question,
     required this.options,
     required this.correctAnswerIndex,
+    required this.order,
+    required this.isActive,
   });
 
   factory QuizTask.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+
+    print('FROM FIRESTORE RAW TYPE = ${data['type']}');
 
     return QuizTask(
       id: doc.id,
@@ -51,8 +59,8 @@ class QuizTask {
       sentence: data['sentence'],
       promptSentence: data['promptSentence'],
       correctText: data['correctText'],
-      type: data['type'] ?? 'mcq',
-      question: data['question'] ?? '',
+      type: (data['type'] ?? 'mcq').toString().trim().toLowerCase(),
+      question: (data['question'] ?? '').toString(),
       options: List<String>.from(data['options'] ?? []),
       correctAnswerIndex: data['correctAnswerIndex'] ?? 0,
       parts: data['parts'] is List ? List<dynamic>.from(data['parts']) : null,
@@ -60,6 +68,8 @@ class QuizTask {
           ? List<String>.from(data['answers'])
           : null,
       hints: data['hints'] is List ? List<String>.from(data['hints']) : null,
+      order: (data['order'] ?? 0) as int,
+      isActive: (data['isActive'] ?? false) as bool,
     );
   }
 }
@@ -92,12 +102,150 @@ class _QuizScreenState extends State<QuizScreen> {
 
   final TextEditingController _writingController = TextEditingController();
 
+  final AiWritingService _aiWritingService = AiWritingService();
+
+  bool _isCheckingEssay = false;
+  EssayReview? _essayReview;
+  bool _essayChecked = false;
+
+  Future<void> _checkEssayWithAi() async {
+    final text = _writingController.text.trim();
+
+    if (text.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Сначала напишите эссе')));
+      return;
+    }
+
+    if (text.length < 30) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Текст слишком короткий для проверки')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isCheckingEssay = true;
+      _essayReview = null;
+      _essayChecked = false;
+    });
+
+    try {
+      final currentTask = _tasks[_currentIndex];
+
+      final review = await _aiWritingService.checkEssay(
+        essay: text,
+        targetLevel: _getAiTargetLevel(),
+        topic: currentTask.question,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _essayReview = review;
+        _essayChecked = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Ошибка AI-проверки: $e')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCheckingEssay = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildEssayReviewCard(EssayReview review) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFBFD3FF)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Результат AI-проверки',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          Text('Оценка: ${review.score}/10'),
+          const SizedBox(height: 6),
+          Text('Уровень: ${review.level}'),
+          const SizedBox(height: 12),
+          const Text(
+            'Комментарий:',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          Text(review.summary),
+          const SizedBox(height: 16),
+          const Text(
+            'Исправленный текст:',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          Text(review.correctedText),
+          const SizedBox(height: 16),
+          const Text('Ошибки:', style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          if (review.mistakes.isEmpty)
+            const Text('Ошибки не найдены')
+          else
+            ...review.mistakes.map(
+              (m) => Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE3EAFB)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Было: ${m.original}'),
+                    const SizedBox(height: 4),
+                    Text('Правильно: ${m.corrected}'),
+                    const SizedBox(height: 4),
+                    Text('Тип: ${m.category}'),
+                    const SizedBox(height: 4),
+                    Text('Объяснение: ${m.explanation}'),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   List<TextEditingController> _gapControllers = [];
   bool _isWritingAnswered = false;
 
-  bool get _isAdvancedWritingLevel {
+  bool get _isGapWritingLevel {
     final level = widget.levelId.toLowerCase();
-    return level == 'level_b1' || level == 'level_b2' || level == 'level_c1';
+    return level == 'level_b1';
+  }
+
+  bool get _isAiEssayLevel {
+    final level = widget.levelId.toLowerCase();
+    return level == 'level_b2' || level == 'level_c1';
+  }
+
+  String _getAiTargetLevel() {
+    final level = widget.levelId.toLowerCase();
+    if (level == 'level_c1') return 'C1';
+    return 'B2';
   }
 
   int _getTaskLimit() {
@@ -194,18 +342,31 @@ class _QuizScreenState extends State<QuizScreen> {
         .collection('sub_tests')
         .doc(widget.subTestId)
         .collection('tasks')
+        .where('isActive', isEqualTo: true)
+        .orderBy('order')
         .get();
+
+    debugPrint('=== LOAD TASKS START ===');
+    debugPrint('levelId: ${widget.levelId}');
+    debugPrint('subTestId: ${widget.subTestId}');
+    debugPrint('docs count: ${snapshot.docs.length}');
+
+    for (final doc in snapshot.docs) {
+      debugPrint('doc id: ${doc.id}');
+      debugPrint('doc data: ${doc.data()}');
+    }
 
     final allTasks = snapshot.docs
         .map((doc) => QuizTask.fromFirestore(doc))
         .toList();
 
-    allTasks.shuffle();
+    debugPrint('parsed tasks count: ${allTasks.length}');
+    for (final task in allTasks) {
+      debugPrint('parsed task type: ${task.type}, question: ${task.question}');
+    }
+    debugPrint('=== LOAD TASKS END ===');
 
-    final limit = _getTaskLimit();
-
-    _tasks = allTasks.take(limit).toList();
-
+    _tasks = allTasks;
     return _tasks;
   }
 
@@ -232,10 +393,18 @@ class _QuizScreenState extends State<QuizScreen> {
     _audioPlayer.stop();
 
     if (task.type == 'writing') {
-      if (_isAdvancedWritingLevel) {
+      _writingController.clear();
+      _essayReview = null;
+      _essayChecked = false;
+      _isCheckingEssay = false;
+
+      if (_isGapWritingLevel) {
         final count = task.answers?.length ?? 0;
         _gapControllers = List.generate(count, (_) => TextEditingController());
         _gapResults = List.generate(count, (_) => null);
+      } else if (_isAiEssayLevel) {
+        // Для B2/C1 ничего дополнительно не нужно:
+        // пользователь просто пишет текст в TextField
       } else if (task.sentence != null) {
         final words = task.sentence!
             .trim()
@@ -645,6 +814,7 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   Widget _buildTaskBody(QuizTask task) {
+    debugPrint('CURRENT TASK TYPE: ${task.type}');
     switch (task.type) {
       case 'writing':
         return _buildWritingUI(task);
@@ -705,7 +875,7 @@ class _QuizScreenState extends State<QuizScreen> {
 
   // --- 1. UI: Writing (Жазуу) ---
   Widget _buildWritingUI(QuizTask task) {
-    if (_isAdvancedWritingLevel) {
+    if (_isGapWritingLevel) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -729,6 +899,55 @@ class _QuizScreenState extends State<QuizScreen> {
               children: _buildInlineWritingWidgets(task),
             ),
           ),
+        ],
+      );
+    }
+
+    if (_isAiEssayLevel) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            task.question,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _writingController,
+            maxLines: 10,
+            decoration: InputDecoration(
+              hintText: 'Write your essay here...',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              filled: true,
+              fillColor: Colors.white,
+            ),
+            onChanged: (_) {
+              if (_essayReview != null || _essayChecked) {
+                setState(() {
+                  _essayReview = null;
+                  _essayChecked = false;
+                });
+              }
+            },
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isCheckingEssay ? null : _checkEssayWithAi,
+              child: _isCheckingEssay
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Проверить с AI'),
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (_essayReview != null) _buildEssayReviewCard(_essayReview!),
         ],
       );
     }
@@ -836,32 +1055,29 @@ class _QuizScreenState extends State<QuizScreen> {
         const SizedBox(height: 10),
 
         Container(
-  width: double.infinity,
-  constraints: const BoxConstraints(
-    minHeight: 80,
-    maxHeight: 180,
-  ),
-  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-  decoration: BoxDecoration(
-    color: Colors.blue.shade50,
-    borderRadius: BorderRadius.circular(16),
-    border: Border.all(color: Colors.blue.shade200),
-  ),
-  child: SingleChildScrollView(
-    child: Align(
-      alignment: Alignment.topCenter,
-      child: Text(
-        task.question,
-        textAlign: TextAlign.center,
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.bold,
-          height: 1.4,
+          width: double.infinity,
+          constraints: const BoxConstraints(minHeight: 80, maxHeight: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.blue.shade200),
+          ),
+          child: SingleChildScrollView(
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: Text(
+                task.question,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  height: 1.4,
+                ),
+              ),
+            ),
+          ),
         ),
-      ),
-    ),
-  ),
-),
 
         const SizedBox(height: 10),
         _buildSmallLabel("answer".tr()),
@@ -1095,7 +1311,7 @@ class _QuizScreenState extends State<QuizScreen> {
             totalWritingGaps: _totalWritingGaps,
             correctWritingGaps: _correctWritingGaps,
             isAdvancedWriting:
-              widget.subTestId == 'writing' && _isAdvancedWritingLevel,
+                widget.subTestId == 'writing' && _isGapWritingLevel,
           ),
         ),
       );
@@ -1129,7 +1345,32 @@ class _QuizScreenState extends State<QuizScreen> {
     }
 
     if (task.type == 'writing') {
-      if (_isAdvancedWritingLevel) {
+      if (_isAiEssayLevel) {
+        return Padding(
+          padding: const EdgeInsets.all(24),
+          child: SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                shape: const StadiumBorder(),
+              ),
+              onPressed: _essayChecked ? _nextQuestion : null,
+              child: const Text(
+                'Next',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      if (_isGapWritingLevel) {
         final isReadyToCheck = _areAllGapsFilled();
         final isCorrect = _isWritingAnswered
             ? _isWritingAnswerCorrect(task)
@@ -1141,11 +1382,16 @@ class _QuizScreenState extends State<QuizScreen> {
             width: double.infinity,
             height: 54,
             child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _isWritingAnswered
-                    ? (isCorrect ? Colors.green : Colors.red)
-                    : Colors.green,
-                shape: const StadiumBorder(),
+              style: ButtonStyle(
+                backgroundColor: WidgetStateProperty.resolveWith<Color>((
+                  states,
+                ) {
+                  if (_isWritingAnswered) {
+                    return isCorrect ? Colors.green : Colors.red;
+                  }
+                  return Colors.green;
+                }),
+                shape: WidgetStateProperty.all(const StadiumBorder()),
               ),
               onPressed: (isReadyToCheck && !_isWritingAnswered)
                   ? () {
@@ -1194,11 +1440,16 @@ class _QuizScreenState extends State<QuizScreen> {
             width: double.infinity,
             height: 54,
             child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _isSentenceAnswered
-                    ? (isCorrect ? Colors.green : Colors.red)
-                    : Colors.green,
-                shape: const StadiumBorder(),
+              style: ButtonStyle(
+                backgroundColor: WidgetStateProperty.resolveWith<Color>((
+                  states,
+                ) {
+                  if (_isSentenceAnswered) {
+                    return isCorrect ? Colors.green : Colors.red;
+                  }
+                  return Colors.green;
+                }),
+                shape: WidgetStateProperty.all(const StadiumBorder()),
               ),
               onPressed: (isReadyToCheck && !_isSentenceAnswered)
                   ? () {

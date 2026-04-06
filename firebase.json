@@ -1,1 +1,39 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"kyrgyztest-app","appId":"1:313802675672:android:e475fd7d2771156e61cead","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"kyrgyztest-app","configurations":{"android":"1:313802675672:android:e475fd7d2771156e61cead","ios":"1:313802675672:ios:f80644ebf161bdf361cead","macos":"1:313802675672:ios:f80644ebf161bdf361cead","web":"1:313802675672:web:5a9ad512eef104fc61cead","windows":"1:313802675672:web:36aeac97b4a7615361cead"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "kyrgyztest-app",
+          "appId": "1:313802675672:android:e475fd7d2771156e61cead",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "kyrgyztest-app",
+          "configurations": {
+            "android": "1:313802675672:android:e475fd7d2771156e61cead",
+            "ios": "1:313802675672:ios:f80644ebf161bdf361cead",
+            "macos": "1:313802675672:ios:f80644ebf161bdf361cead",
+            "web": "1:313802675672:web:5a9ad512eef104fc61cead",
+            "windows": "1:313802675672:web:36aeac97b4a7615361cead"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+    }
+  ]
+}
