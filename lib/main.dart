@@ -6,9 +6,11 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:connectivity_plus/connectivity_plus.dart'; // Не забудьте добавить в pubspec.yaml
 import 'splash_screen.dart';
 import 'firebase_options.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 // 1. Глобальный ключ для доступа к SnackBar из любой точки приложения
-final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,6 +23,10 @@ void main() async {
 
   await EasyLocalization.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  if (FirebaseAuth.instance.currentUser == null) {
+    await FirebaseAuth.instance.signInAnonymously();
+  }
 
   runApp(
     EasyLocalization(
@@ -46,9 +52,9 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     // 2. Запускаем глобальный слушатель интернета
-    _connectivitySubscription = Connectivity()
-        .onConnectivityChanged
-        .listen((List<ConnectivityResult> results) {
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((
+      List<ConnectivityResult> results,
+    ) {
       if (results.contains(ConnectivityResult.none)) {
         _showGlobalNoInternetSnackBar();
       }
@@ -64,7 +70,8 @@ class _MyAppState extends State<MyApp> {
 
   // Функция для показа SnackBar через глобальный ключ
   void _showGlobalNoInternetSnackBar() {
-    scaffoldMessengerKey.currentState?.clearSnackBars(); // Убираем старые сообщения
+    scaffoldMessengerKey.currentState
+        ?.clearSnackBars(); // Убираем старые сообщения
     scaffoldMessengerKey.currentState?.showSnackBar(
       SnackBar(
         content: Text("no_internet".tr()), // Текст подтянется из JSON
@@ -80,7 +87,7 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       // 4. ПРИВЯЗЫВАЕМ КЛЮЧ
-      scaffoldMessengerKey: scaffoldMessengerKey, 
+      scaffoldMessengerKey: scaffoldMessengerKey,
       localizationsDelegates: context.localizationDelegates,
       supportedLocales: context.supportedLocales,
       locale: context.locale,

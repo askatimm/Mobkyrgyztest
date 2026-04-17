@@ -1,25 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 import 'home_screen.dart';
+import 'screens/login_screen.dart';
 
 class LanguageSelectionScreen extends StatelessWidget {
   const LanguageSelectionScreen({super.key});
 
   Future<void> _selectLanguage(BuildContext context, Locale locale) async {
-    // 1. Устанавливаем язык
     await context.setLocale(locale);
 
-    // 2. Сохраняем выбор
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('language_selected', true);
     await prefs.setString('language_code', locale.languageCode);
 
-    // 3. Переход на главный экран
     if (!context.mounted) return;
 
+    final user = FirebaseAuth.instance.currentUser;
+
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      MaterialPageRoute(
+        builder: (_) => user == null || user.isAnonymous
+            ? const LoginScreen()
+            : const HomeScreen(),
+      ),
     );
   }
 
@@ -63,29 +69,23 @@ class LanguageSelectionScreen extends StatelessWidget {
                       ),
                       textAlign: TextAlign.center,
                     ).tr(),
-
                     const SizedBox(height: 10),
-
                     Text(
                       'Вы можете изменить это позже в настройках',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 14,
                         color: Colors.grey,
                       ),
                       textAlign: TextAlign.center,
                     ).tr(),
-
                     const SizedBox(height: 40),
-
                     _buildLanguageButton(
                       context,
                       languageName: 'Кыргызча',
                       flagAsset: 'assets/images/flag_ky.png',
                       locale: const Locale('ky'),
                     ),
-
                     const SizedBox(height: 20),
-
                     _buildLanguageButton(
                       context,
                       languageName: 'Русский',

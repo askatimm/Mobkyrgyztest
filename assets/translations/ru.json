@@ -71,5 +71,20 @@
     "all_answers_correct": "Все ответы правильные!",
     "your_answer": "Ваш ответ",
     "correct_answer": "Правильный ответ",
-    "close": "Закрыть"
+    "close": "Закрыть",
+    "ai_review_result": "Результат AI-проверки",
+    "score": "Оценка",
+    "level": "Уровень",
+    "comment": "Комментарий",
+    "corrected_text": "Исправленный текст",
+    "mistakes": "Ошибки",
+    "no_mistakes_found": "Ошибки не найдены",
+    "original": "Было",
+    "correct1": "Правильно",
+    "type": "Тип",
+    "explanation": "Объяснение",
+    "check_with_ai": "Проверить",
+    "write_your_essay_here": "Напишите эссе здесь...",
+    "write_essay_first": "Сначала напишите эссе",
+    "text_too_short": "Текст слишком короткий для проверки"
 }

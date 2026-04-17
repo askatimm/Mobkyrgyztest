@@ -10,6 +10,7 @@ import 'quiz_result_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/essay_review.dart';
 import '../services/ai_writing_service.dart';
+import '../services/ai_usage_service.dart';
 
 // --- Модель QuizTask ---
 class QuizTask {
@@ -50,8 +51,6 @@ class QuizTask {
   factory QuizTask.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
 
-    print('FROM FIRESTORE RAW TYPE = ${data['type']}');
-
     return QuizTask(
       id: doc.id,
       text: data['text'],
@@ -69,7 +68,7 @@ class QuizTask {
           : null,
       hints: data['hints'] is List ? List<String>.from(data['hints']) : null,
       order: (data['order'] ?? 0) as int,
-      isActive: (data['isActive'] ?? false) as bool,
+      isActive: (data['isActive'] ?? true) as bool,
     );
   }
 }
@@ -103,6 +102,7 @@ class _QuizScreenState extends State<QuizScreen> {
   final TextEditingController _writingController = TextEditingController();
 
   final AiWritingService _aiWritingService = AiWritingService();
+  final AiUsageService _aiUsageService = AiUsageService();
 
   bool _isCheckingEssay = false;
   EssayReview? _essayReview;
@@ -111,16 +111,47 @@ class _QuizScreenState extends State<QuizScreen> {
   Future<void> _checkEssayWithAi() async {
     final text = _writingController.text.trim();
 
-    if (text.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Сначала напишите эссе')));
+    final currentTask = _tasks[_currentIndex];
+
+    final canUseAi = await _aiUsageService.canUseAi(topicId: currentTask.id);
+
+    if (!canUseAi) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Бул тема боюнча AI текшерүү лимити бүттү.'),
+        ),
+      );
       return;
     }
 
-    if (text.length < 30) {
+    if (text.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(('write_essay_first'.tr()))));
+      return;
+    }
+
+    final minLength = _getMinEssayLength();
+    final maxLength = _getMaxEssayLength();
+
+    if (text.length < minLength) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Текст слишком короткий для проверки')),
+        SnackBar(
+          content: Text('Текст өтө кыска. Кеминде $minLength символ жазыңыз.'),
+        ),
+      );
+      return;
+    }
+
+    if (text.length > maxLength) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Текст өтө узун. Максимум $maxLength символ гана уруксат.',
+          ),
+        ),
       );
       return;
     }
@@ -132,13 +163,14 @@ class _QuizScreenState extends State<QuizScreen> {
     });
 
     try {
-      final currentTask = _tasks[_currentIndex];
-
       final review = await _aiWritingService.checkEssay(
+        context: context,
         essay: text,
         targetLevel: _getAiTargetLevel(),
         topic: currentTask.question,
       );
+
+      await _aiUsageService.increaseUsage(topicId: currentTask.id);
 
       if (!mounted) return;
 
@@ -173,33 +205,44 @@ class _QuizScreenState extends State<QuizScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Результат AI-проверки',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          Text(
+            'ai_review_result'.tr(),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
-          Text('Оценка: ${review.score}/10'),
+
+          Text('${'score'.tr()}: ${review.score}/10'),
           const SizedBox(height: 6),
-          Text('Уровень: ${review.level}'),
+
+          Text('${'level'.tr()}: ${review.level}'),
           const SizedBox(height: 12),
-          const Text(
-            'Комментарий:',
-            style: TextStyle(fontWeight: FontWeight.bold),
+
+          Text(
+            'comment'.tr(),
+            style: const TextStyle(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 4),
+
           Text(review.summary),
           const SizedBox(height: 16),
-          const Text(
-            'Исправленный текст:',
-            style: TextStyle(fontWeight: FontWeight.bold),
+
+          Text(
+            'corrected_text'.tr(),
+            style: const TextStyle(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 4),
+
           Text(review.correctedText),
           const SizedBox(height: 16),
-          const Text('Ошибки:', style: TextStyle(fontWeight: FontWeight.bold)),
+
+          Text(
+            'mistakes'.tr(),
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
+
           if (review.mistakes.isEmpty)
-            const Text('Ошибки не найдены')
+            Text('no_mistakes_found'.tr())
           else
             ...review.mistakes.map(
               (m) => Container(
@@ -213,13 +256,16 @@ class _QuizScreenState extends State<QuizScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Было: ${m.original}'),
+                    Text('${'original'.tr()}: ${m.original}'),
                     const SizedBox(height: 4),
-                    Text('Правильно: ${m.corrected}'),
+
+                    Text('${'correct1'.tr()}: ${m.corrected}'),
                     const SizedBox(height: 4),
-                    Text('Тип: ${m.category}'),
+
+                    Text('${'type'.tr()}: ${m.category}'),
                     const SizedBox(height: 4),
-                    Text('Объяснение: ${m.explanation}'),
+
+                    Text('${'explanation'.tr()}: ${m.explanation}'),
                   ],
                 ),
               ),
@@ -246,6 +292,24 @@ class _QuizScreenState extends State<QuizScreen> {
     final level = widget.levelId.toLowerCase();
     if (level == 'level_c1') return 'C1';
     return 'B2';
+  }
+
+  int _getMinEssayLength() {
+    final level = widget.levelId.toLowerCase();
+
+    if (level == 'level_c1') return 250;
+    if (level == 'level_b2') return 150;
+
+    return 30;
+  }
+
+  int _getMaxEssayLength() {
+    final level = widget.levelId.toLowerCase();
+
+    if (level == 'level_c1') return 1200;
+    if (level == 'level_b2') return 800;
+
+    return 500;
   }
 
   int _getTaskLimit() {
@@ -336,39 +400,38 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   Future<List<QuizTask>> _loadTasks() async {
-    final snapshot = await FirebaseFirestore.instance
-        .collection('levels')
-        .doc(widget.levelId)
-        .collection('sub_tests')
-        .doc(widget.subTestId)
-        .collection('tasks')
-        .where('isActive', isEqualTo: true)
-        .orderBy('order')
-        .get();
+  final snapshot = await FirebaseFirestore.instance
+      .collection('levels')
+      .doc(widget.levelId)
+      .collection('sub_tests')
+      .doc(widget.subTestId)
+      .collection('tasks')
+      .get();
 
-    debugPrint('=== LOAD TASKS START ===');
-    debugPrint('levelId: ${widget.levelId}');
-    debugPrint('subTestId: ${widget.subTestId}');
-    debugPrint('docs count: ${snapshot.docs.length}');
+  debugPrint('REAL subTestId = ${widget.subTestId}');
+  debugPrint('REAL levelId = ${widget.levelId}');
+  debugPrint('docs count before map: ${snapshot.docs.length}');
 
-    for (final doc in snapshot.docs) {
-      debugPrint('doc id: ${doc.id}');
-      debugPrint('doc data: ${doc.data()}');
-    }
-
-    final allTasks = snapshot.docs
-        .map((doc) => QuizTask.fromFirestore(doc))
-        .toList();
-
-    debugPrint('parsed tasks count: ${allTasks.length}');
-    for (final task in allTasks) {
-      debugPrint('parsed task type: ${task.type}, question: ${task.question}');
-    }
-    debugPrint('=== LOAD TASKS END ===');
-
-    _tasks = allTasks;
-    return _tasks;
+  for (final doc in snapshot.docs) {
+    debugPrint('DOC ID: ${doc.id}');
+    debugPrint('DOC DATA: ${doc.data()}');
   }
+
+  final allTasks = snapshot.docs
+      .map((doc) => QuizTask.fromFirestore(doc))
+      .where((task) => task.isActive)
+      .toList();
+
+  allTasks.sort((a, b) => a.order.compareTo(b.order));
+
+  final limit = _getTaskLimit();
+
+  _tasks = allTasks.take(limit).toList();
+
+  debugPrint('FINAL TASKS COUNT: ${_tasks.length}');
+
+  return _tasks;
+}
 
   void _prepareCurrentTask() {
     if (_tasks.isEmpty) return;
@@ -915,14 +978,17 @@ class _QuizScreenState extends State<QuizScreen> {
           TextField(
             controller: _writingController,
             maxLines: 10,
+            maxLength: _getMaxEssayLength(),
             decoration: InputDecoration(
-              hintText: 'Write your essay here...',
+              hintText: 'write_your_essay_here'.tr(),
+              helperText: 'Минимум ${_getMinEssayLength()} символ',
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
               filled: true,
               fillColor: Colors.white,
             ),
+
             onChanged: (_) {
               if (_essayReview != null || _essayChecked) {
                 setState(() {
@@ -931,20 +997,6 @@ class _QuizScreenState extends State<QuizScreen> {
                 });
               }
             },
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _isCheckingEssay ? null : _checkEssayWithAi,
-              child: _isCheckingEssay
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Проверить с AI'),
-            ),
           ),
           const SizedBox(height: 16),
           if (_essayReview != null) _buildEssayReviewCard(_essayReview!),
@@ -1348,24 +1400,69 @@ class _QuizScreenState extends State<QuizScreen> {
       if (_isAiEssayLevel) {
         return Padding(
           padding: const EdgeInsets.all(24),
-          child: SizedBox(
-            width: double.infinity,
-            height: 54,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                shape: const StadiumBorder(),
-              ),
-              onPressed: _essayChecked ? _nextQuestion : null,
-              child: const Text(
-                'Next',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    shape: const StadiumBorder(),
+                  ),
+                  onPressed: _isCheckingEssay
+                      ? null
+                      : () async {
+                          // скрываем клавиатуру
+                          FocusScope.of(context).unfocus();
+
+                          await _checkEssayWithAi();
+                        },
+                  child: _isCheckingEssay
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(
+                          'check_with_ai'.tr(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ),
-            ),
+
+              if (_essayChecked) ...[
+                const SizedBox(height: 12),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 54,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      shape: const StadiumBorder(),
+                    ),
+                    onPressed: _nextQuestion,
+                    child: Text(
+                      'next'.tr(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         );
       }

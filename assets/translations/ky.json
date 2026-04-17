@@ -71,5 +71,20 @@
     "all_answers_correct": "Бардык жооптор туура!",
     "your_answer": "Сиздин жооп",
     "correct_answer": "Туура жооп",
-    "close": "Жабуу"
+    "close": "Жабуу",
+    "ai_review_result": "Текшерүүнүн жыйынтыгы",
+    "score": "Баа",
+    "level": "Деңгээли",
+    "comment": "Комментарий",
+    "corrected_text": "Оңдолгон текст",
+    "mistakes": "Каталар",
+    "no_mistakes_found": "Ката табылган жок",
+    "original": "Мурункусу",
+    "correct1": "Туурасы",
+    "type": "Түрү",
+    "explanation": "Түшүндүрмө",
+    "check_with_ai": "Текшерүү",
+    "write_your_essay_here": "Эссени бул жерге жазыңыз...",
+    "write_essay_first": "Адегенде эссе жазыңыз",
+    "text_too_short": "Текст текшерүү үчүн өтө кыска"
 }

@@ -63,6 +63,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '313802675672',
     projectId: 'kyrgyztest-app',
     storageBucket: 'kyrgyztest-app.firebasestorage.app',
+    androidClientId: '313802675672-1u4sr3vrmvuej8js00kig48pfq37v6jv.apps.googleusercontent.com',
+    iosClientId: '313802675672-75v5a1vv0gnj8rtd17de1rcr9hgk9pg0.apps.googleusercontent.com',
     iosBundleId: 'com.example.kyrgyztestapp',
   );
 
@@ -72,6 +74,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '313802675672',
     projectId: 'kyrgyztest-app',
     storageBucket: 'kyrgyztest-app.firebasestorage.app',
+    androidClientId: '313802675672-1u4sr3vrmvuej8js00kig48pfq37v6jv.apps.googleusercontent.com',
+    iosClientId: '313802675672-75v5a1vv0gnj8rtd17de1rcr9hgk9pg0.apps.googleusercontent.com',
     iosBundleId: 'com.example.kyrgyztestapp',
   );
 
@@ -83,4 +87,5 @@ class DefaultFirebaseOptions {
     authDomain: 'kyrgyztest-app.firebaseapp.com',
     storageBucket: 'kyrgyztest-app.firebasestorage.app',
   );
+
 }
