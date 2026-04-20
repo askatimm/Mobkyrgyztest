@@ -86,5 +86,22 @@
     "check_with_ai": "Текшерүү",
     "write_your_essay_here": "Эссени бул жерге жазыңыз...",
     "write_essay_first": "Адегенде эссе жазыңыз",
-    "text_too_short": "Текст текшерүү үчүн өтө кыска"
+    "text_too_short": "Текст текшерүү үчүн өтө кыска",
+    "no_account": "Аккаунтуңуз жокпу?",
+    "register_now": "Катталуу",
+    "register": "Каттоо",
+    "welcome": "Кош келиңиз",
+    "enter_personal_info": "Жеке маалыматыңызды териңиз",
+    "email": "Email",
+    "password": "Сыр сөз",
+    "enter_name1": "Атыңызды жазыңыз",
+    "password_too_short": "Сыр сөз өтө кыска",
+    "passwords_do_not_match": "Сыр сөздөр дал келбейт",
+    "email1": "Email жазыңыз",
+    "password1": "Сыр сөздү жазыңыз",
+    "email_already_used": "Бул email мурда колдонулган",
+    "password_too_weak": "Пароль өтө жөнөкөй",
+    "register_subtitle": "Жаңы аккаунт түзүү үчүн маалыматтарыңызды киргизиңиз",
+    "your_name": "Атыңыз",
+    "repeat_password": "Сыр сөздү кайталаңыз"
 }

@@ -86,5 +86,22 @@
     "check_with_ai": "Проверить",
     "write_your_essay_here": "Напишите эссе здесь...",
     "write_essay_first": "Сначала напишите эссе",
-    "text_too_short": "Текст слишком короткий для проверки"
+    "text_too_short": "Текст слишком короткий для проверки",
+    "no_account": "У вас нет аккаунта?",
+    "register_now": "Зарегистрироваться",
+    "register": "Регистрация",
+    "welcome": "Добро пожаловать",
+    "enter_personal_info": "Введите свои личные данные",
+    "email": "Email",
+    "password": "Пароль",
+    "enter_name1": "Введите имя",
+    "password_too_short": "Пароль слишком короткий",
+    "passwords_do_not_match": "Пароли не совпадают",
+    "email1": "Введите email",
+    "password1": "Введите пароль",
+    "email_already_used": "Этот email уже используется",
+    "password_too_weak": "Пароль слишком слабый",
+    "register_subtitle": "Введите данные для создания аккаунта",
+    "your_name": "Ваше имя",
+    "repeat_password": "Повторите пароль"
 }

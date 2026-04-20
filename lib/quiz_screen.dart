@@ -127,6 +127,8 @@ class _QuizScreenState extends State<QuizScreen> {
     }
 
     if (text.isEmpty) {
+      if (!mounted) return;
+
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(('write_essay_first'.tr()))));
@@ -137,6 +139,7 @@ class _QuizScreenState extends State<QuizScreen> {
     final maxLength = _getMaxEssayLength();
 
     if (text.length < minLength) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Текст өтө кыска. Кеминде $minLength символ жазыңыз.'),
@@ -146,6 +149,7 @@ class _QuizScreenState extends State<QuizScreen> {
     }
 
     if (text.length > maxLength) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -163,6 +167,7 @@ class _QuizScreenState extends State<QuizScreen> {
     });
 
     try {
+      if (!mounted) return;
       final review = await _aiWritingService.checkEssay(
         context: context,
         essay: text,
@@ -171,8 +176,6 @@ class _QuizScreenState extends State<QuizScreen> {
       );
 
       await _aiUsageService.increaseUsage(topicId: currentTask.id);
-
-      if (!mounted) return;
 
       setState(() {
         _essayReview = review;
@@ -400,38 +403,38 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   Future<List<QuizTask>> _loadTasks() async {
-  final snapshot = await FirebaseFirestore.instance
-      .collection('levels')
-      .doc(widget.levelId)
-      .collection('sub_tests')
-      .doc(widget.subTestId)
-      .collection('tasks')
-      .get();
+    final snapshot = await FirebaseFirestore.instance
+        .collection('levels')
+        .doc(widget.levelId)
+        .collection('sub_tests')
+        .doc(widget.subTestId)
+        .collection('tasks')
+        .get();
 
-  debugPrint('REAL subTestId = ${widget.subTestId}');
-  debugPrint('REAL levelId = ${widget.levelId}');
-  debugPrint('docs count before map: ${snapshot.docs.length}');
+    debugPrint('REAL subTestId = ${widget.subTestId}');
+    debugPrint('REAL levelId = ${widget.levelId}');
+    debugPrint('docs count before map: ${snapshot.docs.length}');
 
-  for (final doc in snapshot.docs) {
-    debugPrint('DOC ID: ${doc.id}');
-    debugPrint('DOC DATA: ${doc.data()}');
+    for (final doc in snapshot.docs) {
+      debugPrint('DOC ID: ${doc.id}');
+      debugPrint('DOC DATA: ${doc.data()}');
+    }
+
+    final allTasks = snapshot.docs
+        .map((doc) => QuizTask.fromFirestore(doc))
+        .where((task) => task.isActive)
+        .toList();
+
+    allTasks.sort((a, b) => a.order.compareTo(b.order));
+
+    final limit = _getTaskLimit();
+
+    _tasks = allTasks.take(limit).toList();
+
+    debugPrint('FINAL TASKS COUNT: ${_tasks.length}');
+
+    return _tasks;
   }
-
-  final allTasks = snapshot.docs
-      .map((doc) => QuizTask.fromFirestore(doc))
-      .where((task) => task.isActive)
-      .toList();
-
-  allTasks.sort((a, b) => a.order.compareTo(b.order));
-
-  final limit = _getTaskLimit();
-
-  _tasks = allTasks.take(limit).toList();
-
-  debugPrint('FINAL TASKS COUNT: ${_tasks.length}');
-
-  return _tasks;
-}
 
   void _prepareCurrentTask() {
     if (_tasks.isEmpty) return;
