@@ -71,106 +71,18 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _showPasswordResetDialog() async {
-    final resetEmailController = TextEditingController(
-      text: emailController.text.trim(),
-    );
-    var isSending = false;
-
-    await showDialog<void>(
+    final wasSent = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            Future<void> sendResetLink() async {
-              final email = resetEmailController.text.trim();
-
-              if (email.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('reset_password_email_required'.tr())),
-                );
-                return;
-              }
-
-              setDialogState(() => isSending = true);
-
-              try {
-                await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-
-                if (!dialogContext.mounted) return;
-                Navigator.of(dialogContext).pop();
-
-                ScaffoldMessenger.of(this.context).showSnackBar(
-                  SnackBar(content: Text('reset_password_sent'.tr())),
-                );
-              } on FirebaseAuthException catch (e) {
-                final message = switch (e.code) {
-                  'invalid-email' => 'reset_password_email_invalid'.tr(),
-                  'too-many-requests' =>
-                    'reset_password_too_many_requests'.tr(),
-                  _ => 'reset_password_error'.tr(),
-                };
-
-                if (!dialogContext.mounted) return;
-                ScaffoldMessenger.of(
-                  dialogContext,
-                ).showSnackBar(SnackBar(content: Text(message)));
-              } finally {
-                if (dialogContext.mounted) {
-                  setDialogState(() => isSending = false);
-                }
-              }
-            }
-
-            return AlertDialog(
-              title: Text('reset_password_title'.tr()),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text('reset_password_subtitle'.tr()),
-                  const SizedBox(height: 20),
-                  TextField(
-                    controller: resetEmailController,
-                    enabled: !isSending,
-                    keyboardType: TextInputType.emailAddress,
-                    autofillHints: const [AutofillHints.email],
-                    textInputAction: TextInputAction.done,
-                    onSubmitted: isSending ? null : (_) => sendResetLink(),
-                    decoration: _inputDecoration(
-                      hint: 'email'.tr(),
-                      icon: Icons.email_outlined,
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: isSending
-                      ? null
-                      : () => Navigator.of(dialogContext).pop(),
-                  child: Text('cancel'.tr()),
-                ),
-                FilledButton(
-                  onPressed: isSending ? null : sendResetLink,
-                  child: isSending
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : Text('send_reset_link'.tr()),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      builder: (_) => _PasswordResetDialog(
+        initialEmail: emailController.text.trim(),
+      ),
     );
 
-    resetEmailController.dispose();
+    if (wasSent == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('reset_password_sent'.tr())),
+      );
+    }
   }
 
   Future<void> _loginWithGoogle() async {
@@ -521,6 +433,122 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+
+class _PasswordResetDialog extends StatefulWidget {
+  const _PasswordResetDialog({required this.initialEmail});
+
+  final String initialEmail;
+
+  @override
+  State<_PasswordResetDialog> createState() => _PasswordResetDialogState();
+}
+
+class _PasswordResetDialogState extends State<_PasswordResetDialog> {
+  late final TextEditingController _emailController;
+  bool _isSending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController = TextEditingController(text: widget.initialEmail);
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendResetLink() async {
+    final email = _emailController.text.trim();
+
+    if (email.isEmpty) {
+      _showMessage('reset_password_email_required'.tr());
+      return;
+    }
+
+    setState(() => _isSending = true);
+
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } on FirebaseAuthException catch (e) {
+      final message = switch (e.code) {
+        'invalid-email' => 'reset_password_email_invalid'.tr(),
+        'too-many-requests' => 'reset_password_too_many_requests'.tr(),
+        _ => 'reset_password_error'.tr(),
+      };
+
+      if (mounted) {
+        _showMessage(message);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSending = false);
+      }
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('reset_password_title'.tr()),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('reset_password_subtitle'.tr()),
+          const SizedBox(height: 20),
+          TextField(
+            controller: _emailController,
+            enabled: !_isSending,
+            keyboardType: TextInputType.emailAddress,
+            autofillHints: const [AutofillHints.email],
+            textInputAction: TextInputAction.done,
+            onSubmitted: _isSending ? null : (_) => _sendResetLink(),
+            decoration: InputDecoration(
+              hintText: 'email'.tr(),
+              prefixIcon: const Icon(Icons.email_outlined),
+              filled: true,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(18),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isSending ? null : () => Navigator.of(context).pop(false),
+          child: Text('cancel'.tr()),
+        ),
+        FilledButton(
+          onPressed: _isSending ? null : _sendResetLink,
+          child: _isSending
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : Text('send_reset_link'.tr()),
+        ),
+      ],
     );
   }
 }
