@@ -6,7 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:connectivity_plus/connectivity_plus.dart'; // Не забудьте добавить в pubspec.yaml
 import 'splash_screen.dart';
 import 'firebase_options.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'services/premium_service.dart';
 
 // 1. Глобальный ключ для доступа к SnackBar из любой точки приложения
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
@@ -14,6 +14,7 @@ final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await PremiumService.init();
 
   // Блокируем ориентацию
   await SystemChrome.setPreferredOrientations([
@@ -23,10 +24,6 @@ void main() async {
 
   await EasyLocalization.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
-  if (FirebaseAuth.instance.currentUser == null) {
-    await FirebaseAuth.instance.signInAnonymously();
-  }
 
   runApp(
     EasyLocalization(

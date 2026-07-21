@@ -8,6 +8,7 @@ import 'package:easy_localization/easy_localization.dart';
 import '../home_screen.dart';
 import '../services/auth_service.dart';
 import 'register_screen.dart';
+import '../services/premium_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -45,6 +46,7 @@ class _LoginScreenState extends State<LoginScreen> {
         email: emailController.text.trim(),
         password: passwordController.text.trim(),
       );
+      await PremiumService.syncUserWithRevenueCat();
 
       await _goToHome();
     } on FirebaseAuthException catch (e) {
@@ -73,6 +75,7 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _isLoading = true);
 
       await _authService.signInWithGoogle();
+      await PremiumService.syncUserWithRevenueCat();
       await _goToHome();
     } catch (e) {
       if (!mounted) return;
@@ -92,6 +95,7 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _isLoading = true);
 
       await _authService.signInWithApple();
+      await PremiumService.syncUserWithRevenueCat();
       await _goToHome();
     } catch (e) {
       if (!mounted) return;

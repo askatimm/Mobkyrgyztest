@@ -11,6 +11,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/essay_review.dart';
 import '../services/ai_writing_service.dart';
 import '../services/ai_usage_service.dart';
+import '../services/premium_service.dart';
+import '../services/daily_topic_service.dart';
+import 'screens/daily_limit_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../services/user_service.dart';
 
 // --- Модель QuizTask ---
 class QuizTask {
@@ -100,9 +105,10 @@ class _QuizScreenState extends State<QuizScreen> {
   int _correctWritingGaps = 0;
 
   final TextEditingController _writingController = TextEditingController();
-
   final AiWritingService _aiWritingService = AiWritingService();
   final AiUsageService _aiUsageService = AiUsageService();
+  final DailyTopicService _dailyTopicService = DailyTopicService();
+  final UserService _userService = UserService();
 
   bool _isCheckingEssay = false;
   EssayReview? _essayReview;
@@ -113,18 +119,30 @@ class _QuizScreenState extends State<QuizScreen> {
 
     final currentTask = _tasks[_currentIndex];
 
-    final canUseAi = await _aiUsageService.canUseAi(topicId: currentTask.id);
+    final isPremium = await _userService.isPremium();
 
-    if (!canUseAi) {
-      if (!mounted) return;
+    bool canUseAi = true;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Бул тема боюнча AI текшерүү лимити бүттү.'),
-        ),
-      );
-      return;
-    }
+    // 👇 только для AI writing
+    // if (_isAiEssayLevel) {
+    //   if (!isPremium) {
+    //     await PremiumService.showPaywall();
+    //     return;
+    //   }
+
+    //   canUseAi = await _aiUsageService.canUseAi(topicId: currentTask.id);
+
+    //   if (!canUseAi) {
+    //     if (!mounted) return;
+
+    //     ScaffoldMessenger.of(context).showSnackBar(
+    //       const SnackBar(
+    //         content: Text('Бул тема боюнча AI текшерүү лимити бүттү.'),
+    //       ),
+    //     );
+    //     return;
+    //   }
+    // }
 
     if (text.isEmpty) {
       if (!mounted) return;
@@ -168,6 +186,8 @@ class _QuizScreenState extends State<QuizScreen> {
 
     try {
       if (!mounted) return;
+
+      debugPrint("TOPIC SENT: ${currentTask.question}");
       final review = await _aiWritingService.checkEssay(
         context: context,
         essay: text,
@@ -175,7 +195,21 @@ class _QuizScreenState extends State<QuizScreen> {
         topic: currentTask.question,
       );
 
-      await _aiUsageService.increaseUsage(topicId: currentTask.id);
+      // 🔥 сохраняем как выполненную тему СРАЗУ
+      if (_isAiEssayLevel) {
+        final userId = FirebaseAuth.instance.currentUser!.uid;
+
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .collection('daily_topics')
+            .doc('${widget.levelId}_${widget.subTestId}')
+            .set({
+              'completedTaskIds': FieldValue.arrayUnion([currentTask.id]),
+            }, SetOptions(merge: true));
+      }
+
+      //await _aiUsageService.increaseUsage(topicId: currentTask.id);
 
       setState(() {
         _essayReview = review;
@@ -288,7 +322,9 @@ class _QuizScreenState extends State<QuizScreen> {
 
   bool get _isAiEssayLevel {
     final level = widget.levelId.toLowerCase();
-    return level == 'level_b2' || level == 'level_c1';
+
+    return widget.subTestId == 'writing' &&
+        (level == 'level_b2' || level == 'level_c1');
   }
 
   String _getAiTargetLevel() {
@@ -345,6 +381,11 @@ class _QuizScreenState extends State<QuizScreen> {
   final AudioRecorder _recorder = AudioRecorder();
   StreamSubscription<PlayerState>? _playerStateSubscription;
   String? _currentlyLoadedAudioUrl;
+  //  ПРОГРЕСС АУДИО
+  Duration _position = Duration.zero;
+  Duration _duration = Duration.zero;
+  StreamSubscription<Duration>? _positionSub;
+  StreamSubscription<Duration?>? _durationSub;
 
   // Общее состояние UI
   bool _isPlayerLoading = false;
@@ -381,11 +422,24 @@ class _QuizScreenState extends State<QuizScreen> {
         }
       }
     });
+    _positionSub = _audioPlayer.positionStream.listen((pos) {
+      if (mounted) {
+        setState(() => _position = pos);
+      }
+    });
+
+    _durationSub = _audioPlayer.durationStream.listen((dur) {
+      if (mounted && dur != null) {
+        setState(() => _duration = dur);
+      }
+    });
   }
 
   @override
   void dispose() {
     _playerStateSubscription?.cancel();
+    _positionSub?.cancel();
+    _durationSub?.cancel();
     _effectPlayer.dispose();
     _audioPlayer.dispose();
     _userPlayer.dispose();
@@ -411,28 +465,61 @@ class _QuizScreenState extends State<QuizScreen> {
         .collection('tasks')
         .get();
 
-    debugPrint('REAL subTestId = ${widget.subTestId}');
-    debugPrint('REAL levelId = ${widget.levelId}');
-    debugPrint('docs count before map: ${snapshot.docs.length}');
-
-    for (final doc in snapshot.docs) {
-      debugPrint('DOC ID: ${doc.id}');
-      debugPrint('DOC DATA: ${doc.data()}');
-    }
-
     final allTasks = snapshot.docs
         .map((doc) => QuizTask.fromFirestore(doc))
         .where((task) => task.isActive)
         .toList();
 
-    allTasks.sort((a, b) => a.order.compareTo(b.order));
+    // ✅ ТОЛЬКО для writing (AI эссе)
+    if (_isAiEssayLevel) {
+      final userId = FirebaseAuth.instance.currentUser!.uid;
 
-    final limit = _getTaskLimit();
+      final dailyDocRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('daily_topics')
+          .doc('${widget.levelId}_${widget.subTestId}');
 
-    _tasks = allTasks.take(limit).toList();
+      final dailyDoc = await dailyDocRef.get();
 
-    debugPrint('FINAL TASKS COUNT: ${_tasks.length}');
+      final taskIds = await _dailyTopicService.getTodayTaskIds(
+        levelId: widget.levelId,
+        subTestId: widget.subTestId,
+      );
 
+      final completed = dailyDoc.exists
+          ? List<String>.from(dailyDoc.data()?['completedTaskIds'] ?? [])
+          : [];
+
+      final filtered = allTasks
+          .where(
+            (task) => taskIds.contains(task.id) && !completed.contains(task.id),
+          )
+          .toList();
+
+      // 🔥 если всё пройдено → лимит экран
+      // if (filtered.isEmpty) {
+      //   Future.microtask(() {
+      //     if (!mounted) return;
+      //     Navigator.pushReplacement(
+      //       context,
+      //       MaterialPageRoute(builder: (_) => const DailyLimitScreen()),
+      //     );
+      //   });
+      //   return [];
+      // }
+
+      filtered.shuffle();
+      _tasks = filtered;
+      return _tasks;
+    }
+
+    // ✅ для остальных (грамматика, лексика и т.д.)
+    allTasks.shuffle();
+
+    final limitedTasks = allTasks.take(_getTaskLimit()).toList();
+
+    _tasks = limitedTasks;
     return _tasks;
   }
 
@@ -490,6 +577,12 @@ class _QuizScreenState extends State<QuizScreen> {
 
   String _normalizeAnswer(String value) {
     return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  String _formatDuration(Duration d) {
+    final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return "$minutes:$seconds";
   }
 
   String _getFullUserAnswer(int index) {
@@ -973,6 +1066,56 @@ class _QuizScreenState extends State<QuizScreen> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // FutureBuilder<bool>(
+          //   future: _userService.isPremium(),
+          //   builder: (context, snapshot) {
+          //     final isPremium = snapshot.data ?? false;
+
+          //     if (isPremium) return const SizedBox.shrink();
+
+          //     return Container(
+          //       width: double.infinity,
+          //       margin: const EdgeInsets.only(bottom: 16),
+          //       padding: const EdgeInsets.all(14),
+          //       decoration: BoxDecoration(
+          //         color: const Color(0xFFFFF3CD),
+          //         borderRadius: BorderRadius.circular(14),
+          //         border: Border.all(color: const Color(0xFFFFD54F)),
+          //       ),
+          //       child: Column(
+          //         crossAxisAlignment: CrossAxisAlignment.start,
+          //         children: [
+          //           const Row(
+          //             children: [
+          //               Icon(Icons.lock, color: Colors.orange),
+          //               SizedBox(width: 8),
+          //               Expanded(
+          //                 child: Text(
+          //                   'AI текшерүү Premium колдонуучулар үчүн гана жеткиликтүү',
+          //                   style: TextStyle(
+          //                     fontWeight: FontWeight.bold,
+          //                     fontSize: 14,
+          //                   ),
+          //                 ),
+          //               ),
+          //             ],
+          //           ),
+          //           const SizedBox(height: 10),
+          //           SizedBox(
+          //             width: double.infinity,
+          //             child: ElevatedButton(
+          //               onPressed: () async {
+          //                 await PremiumService.showPaywall();
+          //                 setState(() {});
+          //               },
+          //               child: const Text('Премиум сатып алуу'),
+          //             ),
+          //           ),
+          //         ],
+          //       ),
+          //     );
+          //   },
+          // ),
           Text(
             task.question,
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -1209,8 +1352,12 @@ class _QuizScreenState extends State<QuizScreen> {
                   foregroundColor: Colors.black,
                   shape: const StadiumBorder(),
                   side: BorderSide(
-                    color: _isMcqAnswered && index == task.correctAnswerIndex
-                        ? Colors.green
+                    color: _isMcqAnswered
+                        ? (index == task.correctAnswerIndex
+                              ? Colors.green
+                              : (index == _selectedAnswerIndex
+                                    ? const Color.fromARGB(255, 245, 97, 86)
+                                    : Colors.grey.shade400))
                         : Colors.grey.shade400,
                     width:
                         _isMcqAnswered &&
@@ -1270,23 +1417,69 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   Widget _buildAudioPlayerWidget() {
-    return IconButton(
-      iconSize: 72,
-      icon: _isPlayerLoading
-          ? const CircularProgressIndicator()
-          : Icon(
-              _isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
-              color: Colors.blue,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          iconSize: 72,
+          icon: _isPlayerLoading
+              ? const CircularProgressIndicator()
+              : Icon(
+                  _isPlaying
+                      ? Icons.pause_circle_filled
+                      : Icons.play_circle_filled,
+                  color: Colors.blue,
+                ),
+          onPressed: _isPlayerLoading
+              ? null
+              : () {
+                  if (_isPlaying) {
+                    _audioPlayer.pause();
+                  } else {
+                    _audioPlayer.play();
+                  }
+                },
+        ),
+
+        /// ПРОГРЕСС БАР
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: Colors.blue,
+            inactiveTrackColor: Colors.blue.withValues(alpha: 0.2),
+
+            thumbColor: Colors.blue,
+            overlayColor: Colors.blue.withValues(alpha: 0.2),
+
+            trackHeight: 4,
+
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+          ),
+          child: Slider(
+            min: 0,
+            max: _duration.inSeconds.toDouble().clamp(1, double.infinity),
+            value: _position.inSeconds.toDouble().clamp(
+              0,
+              _duration.inSeconds.toDouble(),
             ),
-      onPressed: _isPlayerLoading
-          ? null
-          : () {
-              if (_isPlaying) {
-                _audioPlayer.pause();
-              } else {
-                _audioPlayer.play();
-              }
+            onChanged: (value) async {
+              await _audioPlayer.seek(Duration(seconds: value.toInt()));
             },
+          ),
+        ),
+
+        /// ⏱ время
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(_formatDuration(_position)),
+              Text(_formatDuration(_duration)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -1350,12 +1543,23 @@ class _QuizScreenState extends State<QuizScreen> {
   void _nextQuestion() {
     _audioPlayer.stop();
     _userPlayer.stop();
+
     if (_currentIndex < _tasks.length - 1) {
       setState(() {
         _currentIndex++;
         _prepareCurrentTask();
       });
     } else {
+      // Для writing B2/C1 показываем DailyLimitScreen
+      if (widget.subTestId == 'writing' && _isAiEssayLevel) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const DailyLimitScreen()),
+        );
+        return;
+      }
+
+      // Для остальных разделов обычный экран результата
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -1367,6 +1571,7 @@ class _QuizScreenState extends State<QuizScreen> {
             correctWritingGaps: _correctWritingGaps,
             isAdvancedWriting:
                 widget.subTestId == 'writing' && _isGapWritingLevel,
+            isEssayLevel: widget.subTestId == 'writing' && _isAiEssayLevel,
           ),
         ),
       );
@@ -1414,12 +1619,33 @@ class _QuizScreenState extends State<QuizScreen> {
                     backgroundColor: Colors.blue,
                     shape: const StadiumBorder(),
                   ),
-                  onPressed: _isCheckingEssay
+                  onPressed: (_isCheckingEssay)
                       ? null
                       : () async {
-                          // скрываем клавиатуру
                           FocusScope.of(context).unfocus();
 
+                          final currentTask = _tasks[_currentIndex];
+
+                          bool canUseAi = true;
+
+                          // if (_isAiEssayLevel) {
+                          //   canUseAi = await _aiUsageService.canUseAi(
+                          //     topicId: currentTask.id,
+                          //   );
+                          // }
+
+                          // if (!canUseAi &&
+                          //     widget.subTestId == 'writing' &&
+                          //     _isAiEssayLevel) {
+                          //       if (!mounted) return;
+                          //   Navigator.push(
+                          //     context,
+                          //     MaterialPageRoute(
+                          //       builder: (_) => const DailyLimitScreen(),
+                          //     ),
+                          //   );
+                          //   return;
+                          // }
                           await _checkEssayWithAi();
                         },
                   child: _isCheckingEssay

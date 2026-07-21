@@ -21,6 +21,7 @@ class QuizResultScreen extends StatelessWidget {
   final int totalWritingGaps;
   final int correctWritingGaps;
   final bool isAdvancedWriting;
+  final bool isEssayLevel;
 
   const QuizResultScreen({
     super.key,
@@ -30,6 +31,7 @@ class QuizResultScreen extends StatelessWidget {
     this.totalWritingGaps = 0,
     this.correctWritingGaps = 0,
     this.isAdvancedWriting = false,
+    this.isEssayLevel = false,
   });
 
   // 💡 Эта функция определяет, что показывать,
@@ -86,6 +88,74 @@ class QuizResultScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (isEssayLevel) {
+      final resultData = ResultData(
+        imagePath: 'assets/images/results_excellent.png',
+        messageKey: 'results_excellent_message',
+        color: Colors.green.shade700,
+      );
+
+      return Scaffold(
+        appBar: AppBar(
+          title: Text('results_title'.tr()),
+          centerTitle: true,
+          automaticallyImplyLeading: false,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Image.asset(resultData.imagePath, height: 200),
+                const SizedBox(height: 32),
+
+                Container(
+                  padding: const EdgeInsets.all(24.0),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade400, width: 2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        'essay_result_message'.tr(),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          color: Color.fromARGB(221, 28, 47, 60),
+                          height: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const Spacer(),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey.shade700,
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                    child: Text(
+                      'results_close_button'.tr(),
+                      style: const TextStyle(fontSize: 18),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     if (isAdvancedWriting) {
       final wrongCount = totalWritingGaps - correctWritingGaps;
       final resultData = _getAdvancedWritingResultData();

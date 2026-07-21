@@ -3,18 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'quiz_screen.dart';
 
-
 /// ОБЪЁМНАЯ КНОПКА
 
 class VolumeButton extends StatefulWidget {
   final String text;
   final VoidCallback onPressed;
 
-  const VolumeButton({
-    super.key,
-    required this.text,
-    required this.onPressed,
-  });
+  const VolumeButton({super.key, required this.text, required this.onPressed});
 
   @override
   State<VolumeButton> createState() => _VolumeButtonState();
@@ -41,10 +36,7 @@ class _VolumeButtonState extends State<VolumeButton> {
           gradient: const LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF6DDC6D),
-              Color(0xFF2EAD4A),
-            ],
+            colors: [Color(0xFF6DDC6D), Color(0xFF2EAD4A)],
           ),
           boxShadow: _pressed
               ? []
@@ -87,6 +79,9 @@ class QuizInstructionsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isAiWriting =
+        subTestId == 'writing' &&
+        (levelId == 'level_b2' || levelId == 'level_c1');
     return Scaffold(
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
@@ -104,12 +99,8 @@ class QuizInstructionsScreen extends StatelessWidget {
 
       body: Stack(
         children: [
-
           Positioned.fill(
-            child: Image.asset(
-              'assets/images/bg.jpeg',
-              fit: BoxFit.cover,
-            ),
+            child: Image.asset('assets/images/bg.jpeg', fit: BoxFit.cover),
           ),
 
           SafeArea(
@@ -135,14 +126,54 @@ class QuizInstructionsScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 20),
 
-                    Text(
-                      instructionKey.tr(),
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        color: Colors.black54,
-                        height: 1.4,
-                      ),
+                    Column(
+                      children: [
+                        Text(
+                          instructionKey.tr(),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            color: Colors.black54,
+                            height: 1.4,
+                          ),
+                        ),
+
+                        if (isAiWriting) ...[
+                          const SizedBox(height: 20),
+
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: Colors.orange.withValues(alpha: 0.25),
+                              ),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(
+                                  Icons.info_outline,
+                                  color: Colors.orange,
+                                ),
+                                const SizedBox(width: 10),
+
+                                Expanded(
+                                  child: Text(
+                                    'ai_check_notice'.tr(),
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.black87,
+                                      height: 1.45,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 40),
 

@@ -4,6 +4,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/auth_service.dart';
 import 'screens/login_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -13,7 +14,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  String _userName = "User";
   bool _isSoundEnabled = true;
   String _avatarPath = 'assets/images/avatar_1.jpeg';
 
@@ -28,7 +28,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
 
     setState(() {
-      _userName = prefs.getString('user_name') ?? "User";
       _isSoundEnabled = prefs.getBool('test_sound') ?? true;
       _avatarPath =
           prefs.getString('avatar_path') ?? 'assets/images/avatar_1.jpeg';
@@ -42,7 +41,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _editName() {
-    final controller = TextEditingController(text: _userName);
+    final user = FirebaseAuth.instance.currentUser;
+
+    final controller = TextEditingController(text: user?.displayName ?? '');
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -58,10 +59,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           TextButton(
             onPressed: () async {
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setString('user_name', controller.text);
+              final user = FirebaseAuth.instance.currentUser;
+
+              await user?.updateDisplayName(controller.text.trim());
+              await user?.reload();
+
               if (!mounted) return;
-              setState(() => _userName = controller.text);
+
+              setState(() {});
               Navigator.pop(context);
             },
             child: Text("save".tr()),
@@ -151,6 +156,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+
+    final userName = user?.displayName?.trim().isNotEmpty == true
+        ? user!.displayName!
+        : 'User';
     return Scaffold(
       // Прозрачный AppBar, чтобы фон был виден под ним
       extendBodyBehindAppBar: true,
@@ -183,9 +193,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 24),
 
                 /// ===== PROFILE =====
-                CircleAvatar(
-                  radius: 50,
-                  backgroundImage: AssetImage(_avatarPath),
+                GestureDetector(
+                  onTap: _changeAvatar,
+                  child: Stack(
+                    alignment: Alignment.bottomRight,
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.12),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: CircleAvatar(
+                          radius: 50,
+                          backgroundColor: Colors.white,
+                          child: CircleAvatar(
+                            radius: 46,
+                            backgroundImage: AssetImage(_avatarPath),
+                          ),
+                        ),
+                      ),
+
+                      Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: Colors.blueAccent,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        child: const Icon(
+                          Icons.add,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 10),
                 TextButton.icon(
@@ -196,7 +245,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   },
                   icon: const Icon(Icons.edit, size: 16),
                   label: Text(
-                    _userName,
+                    userName,
                     style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
@@ -205,10 +254,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
                 // Кнопка смены аватара отдельно для удобства
-                TextButton(
-                  onPressed: _changeAvatar,
-                  child: Text("avatar".tr()),
-                ),
 
                 /// ===== LANGUAGE + SOUND =====
                 _settingsContainer([
@@ -268,9 +313,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ListTile(
                     leading: const Icon(Icons.logout, color: Colors.redAccent),
                     title: Text(
-                      context.locale.languageCode == 'ky'
-                          ? 'Чыгуу'
-                          : 'Выйти',
+                      context.locale.languageCode == 'ky' ? 'Чыгуу' : 'Выйти',
                       style: const TextStyle(color: Colors.redAccent),
                     ),
                     onTap: _logout,
