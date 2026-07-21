@@ -70,6 +70,109 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _showPasswordResetDialog() async {
+    final resetEmailController = TextEditingController(
+      text: emailController.text.trim(),
+    );
+    var isSending = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> sendResetLink() async {
+              final email = resetEmailController.text.trim();
+
+              if (email.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('reset_password_email_required'.tr())),
+                );
+                return;
+              }
+
+              setDialogState(() => isSending = true);
+
+              try {
+                await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+
+                if (!dialogContext.mounted) return;
+                Navigator.of(dialogContext).pop();
+
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  SnackBar(content: Text('reset_password_sent'.tr())),
+                );
+              } on FirebaseAuthException catch (e) {
+                final message = switch (e.code) {
+                  'invalid-email' => 'reset_password_email_invalid'.tr(),
+                  'too-many-requests' =>
+                    'reset_password_too_many_requests'.tr(),
+                  _ => 'reset_password_error'.tr(),
+                };
+
+                if (!dialogContext.mounted) return;
+                ScaffoldMessenger.of(
+                  dialogContext,
+                ).showSnackBar(SnackBar(content: Text(message)));
+              } finally {
+                if (dialogContext.mounted) {
+                  setDialogState(() => isSending = false);
+                }
+              }
+            }
+
+            return AlertDialog(
+              title: Text('reset_password_title'.tr()),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('reset_password_subtitle'.tr()),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: resetEmailController,
+                    enabled: !isSending,
+                    keyboardType: TextInputType.emailAddress,
+                    autofillHints: const [AutofillHints.email],
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: isSending ? null : (_) => sendResetLink(),
+                    decoration: _inputDecoration(
+                      hint: 'email'.tr(),
+                      icon: Icons.email_outlined,
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSending
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
+                  child: Text('cancel'.tr()),
+                ),
+                FilledButton(
+                  onPressed: isSending ? null : sendResetLink,
+                  child: isSending
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text('send_reset_link'.tr()),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    resetEmailController.dispose();
+  }
+
   Future<void> _loginWithGoogle() async {
     try {
       setState(() => _isLoading = true);
@@ -257,7 +360,23 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                           ),
-                          const SizedBox(height: 24),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: _isLoading
+                                  ? null
+                                  : _showPasswordResetDialog,
+                              style: TextButton.styleFrom(
+                                foregroundColor: const Color(0xFF2563EB),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 8,
+                                ),
+                              ),
+                              child: Text('forgot_password'.tr()),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
 
                           SizedBox(
                             height: 56,
