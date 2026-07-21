@@ -8,6 +8,7 @@ import 'package:easy_localization/easy_localization.dart';
 import '../home_screen.dart';
 import '../services/auth_service.dart';
 import 'register_screen.dart';
+import 'forgot_password_screen.dart';
 import '../services/premium_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -70,19 +71,15 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _showPasswordResetDialog() async {
-    final wasSent = await showDialog<bool>(
-      context: context,
-      builder: (_) => _PasswordResetDialog(
-        initialEmail: emailController.text.trim(),
+  Future<void> _openPasswordResetScreen() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ForgotPasswordScreen(
+          initialEmail: emailController.text.trim(),
+        ),
       ),
     );
-
-    if (wasSent == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('reset_password_sent'.tr())),
-      );
-    }
   }
 
   Future<void> _loginWithGoogle() async {
@@ -277,7 +274,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: TextButton(
                               onPressed: _isLoading
                                   ? null
-                                  : _showPasswordResetDialog,
+                                  : _openPasswordResetScreen,
                               style: TextButton.styleFrom(
                                 foregroundColor: const Color(0xFF2563EB),
                                 padding: const EdgeInsets.symmetric(
@@ -433,122 +430,6 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ],
       ),
-    );
-  }
-}
-
-
-class _PasswordResetDialog extends StatefulWidget {
-  const _PasswordResetDialog({required this.initialEmail});
-
-  final String initialEmail;
-
-  @override
-  State<_PasswordResetDialog> createState() => _PasswordResetDialogState();
-}
-
-class _PasswordResetDialogState extends State<_PasswordResetDialog> {
-  late final TextEditingController _emailController;
-  bool _isSending = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _emailController = TextEditingController(text: widget.initialEmail);
-  }
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _sendResetLink() async {
-    final email = _emailController.text.trim();
-
-    if (email.isEmpty) {
-      _showMessage('reset_password_email_required'.tr());
-      return;
-    }
-
-    setState(() => _isSending = true);
-
-    try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-
-      if (!mounted) return;
-      Navigator.of(context).pop(true);
-    } on FirebaseAuthException catch (e) {
-      final message = switch (e.code) {
-        'invalid-email' => 'reset_password_email_invalid'.tr(),
-        'too-many-requests' => 'reset_password_too_many_requests'.tr(),
-        _ => 'reset_password_error'.tr(),
-      };
-
-      if (mounted) {
-        _showMessage(message);
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isSending = false);
-      }
-    }
-  }
-
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text('reset_password_title'.tr()),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('reset_password_subtitle'.tr()),
-          const SizedBox(height: 20),
-          TextField(
-            controller: _emailController,
-            enabled: !_isSending,
-            keyboardType: TextInputType.emailAddress,
-            autofillHints: const [AutofillHints.email],
-            textInputAction: TextInputAction.done,
-            onSubmitted: _isSending ? null : (_) => _sendResetLink(),
-            decoration: InputDecoration(
-              hintText: 'email'.tr(),
-              prefixIcon: const Icon(Icons.email_outlined),
-              filled: true,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(18),
-                borderSide: BorderSide.none,
-              ),
-            ),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: _isSending ? null : () => Navigator.of(context).pop(false),
-          child: Text('cancel'.tr()),
-        ),
-        FilledButton(
-          onPressed: _isSending ? null : _sendResetLink,
-          child: _isSending
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-              : Text('send_reset_link'.tr()),
-        ),
-      ],
     );
   }
 }
