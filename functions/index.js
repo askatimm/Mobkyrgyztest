@@ -9,8 +9,60 @@ initializeApp();
 const db = getFirestore();
 const MAX_AI_CHECKS_PER_TOPIC = 4;
 const MAX_AI_CHECKS_PER_LEVEL = 20;
+const REVENUECAT_ENTITLEMENT_ID = "KyrgyzTest Pro";
 
 setGlobalOptions({ maxInstances: 10 });
+
+async function hasActivePremium(appUserId) {
+  const apiKey = process.env.REVENUECAT_SECRET_API_KEY;
+
+  if (!apiKey) {
+    throw new HttpsError(
+      "internal",
+      "Missing REVENUECAT_SECRET_API_KEY"
+    );
+  }
+
+  const response = await fetch(
+    `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(appUserId)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        Accept: "application/json",
+      },
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    logger.error("RevenueCat subscription check failed", {
+      status: response.status,
+      error: errorText,
+    });
+    throw new HttpsError(
+      "unavailable",
+      "Unable to verify Premium subscription"
+    );
+  }
+
+  const customerInfo = await response.json();
+  const entitlement =
+    customerInfo?.subscriber?.entitlements?.[REVENUECAT_ENTITLEMENT_ID];
+
+  if (!entitlement) return false;
+
+  const expiresAt = entitlement.expires_date;
+  const gracePeriodExpiresAt = entitlement.grace_period_expires_date;
+
+  if (expiresAt === null) return true;
+
+  const now = Date.now();
+  return (
+    Date.parse(expiresAt) > now ||
+    (gracePeriodExpiresAt &&
+      Date.parse(gracePeriodExpiresAt) > now)
+  );
+}
 
 async function callGemini(models, body, apiKey) {
   let lastError = null;
@@ -198,6 +250,14 @@ exports.checkEssay = onCall(
         throw new HttpsError(
           "unauthenticated",
           "Authentication is required"
+        );
+      }
+
+      const hasPremium = await hasActivePremium(request.auth.uid);
+      if (!hasPremium) {
+        throw new HttpsError(
+          "permission-denied",
+          "PREMIUM_REQUIRED"
         );
       }
 
