@@ -85,6 +85,8 @@
     "type": "Түрү",
     "explanation": "Түшүндүрмө",
     "check_with_ai": "Текшерүү",
+    "ai_checks_remaining": "Текшерүү калды",
+    "ai_checks_limit_reached": "Бул тема үчүн текшерүү лимити бүттү",
     "write_your_essay_here": "Эссени бул жерге жазыңыз...",
     "write_essay_first": "Адегенде эссе жазыңыз",
     "text_too_short": "Текст текшерүү үчүн өтө кыска",
