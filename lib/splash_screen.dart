@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:kyrgyztestapp/language_selection_screen.dart';
 import 'package:kyrgyztestapp/home_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:kyrgyztestapp/screens/login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -27,18 +29,22 @@ class _SplashScreenState extends State<SplashScreen> {
 
     if (!mounted) return;
 
-    // Навигация
-    if (isLanguageSelected) {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (!isLanguageSelected) {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        MaterialPageRoute(builder: (_) => const LanguageSelectionScreen()),
       );
-    } else {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => const LanguageSelectionScreen(),
-        ),
-      );
+      return;
     }
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => user == null || user.isAnonymous
+            ? const LoginScreen()
+            : const HomeScreen(),
+      ),
+    );
   }
 
   @override
