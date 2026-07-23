@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/auth_service.dart';
+import '../services/premium_service.dart';
 import 'screens/login_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -15,6 +16,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _isSoundEnabled = true;
+  bool _isPurchasesBusy = false;
   String _avatarPath = 'assets/images/avatar_1.jpeg';
 
   @override
@@ -103,6 +105,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             );
           }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openPremium() async {
+    setState(() => _isPurchasesBusy = true);
+    final isPremium = await PremiumService.showPaywall();
+
+    if (!mounted) return;
+    setState(() => _isPurchasesBusy = false);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isPremium
+              ? (context.locale.languageCode == 'ky'
+                    ? 'Premium ийгиликтүү кошулду'
+                    : 'Premium успешно подключен')
+              : (context.locale.languageCode == 'ky'
+                    ? 'Сатып алуу аяктаган жок'
+                    : 'Покупка не завершена'),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _restorePurchases() async {
+    setState(() => _isPurchasesBusy = true);
+    final isPremium = await PremiumService.restorePurchases();
+
+    if (!mounted) return;
+    setState(() => _isPurchasesBusy = false);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isPremium
+              ? (context.locale.languageCode == 'ky'
+                    ? 'Premium сатып алуу калыбына келтирилди'
+                    : 'Покупка Premium восстановлена')
+              : (context.locale.languageCode == 'ky'
+                    ? 'Активдүү Premium сатып алуу табылган жок'
+                    : 'Активная покупка Premium не найдена'),
         ),
       ),
     );
@@ -292,6 +338,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 /// ===== OTHER SETTINGS =====
                 _settingsContainer([
+                  ListTile(
+                    leading: const Icon(
+                      Icons.workspace_premium_rounded,
+                      color: Colors.amber,
+                    ),
+                    title: Text(
+                      context.locale.languageCode == 'ky'
+                          ? 'KyrgyzTest Premium'
+                          : 'KyrgyzTest Premium',
+                    ),
+                    subtitle: Text(
+                      context.locale.languageCode == 'ky'
+                          ? 'AI текшерүүнү ачуу'
+                          : 'Открыть AI-проверку',
+                    ),
+                    trailing: _isPurchasesBusy
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.chevron_right),
+                    onTap: _isPurchasesBusy ? null : _openPremium,
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(
+                      Icons.restore_rounded,
+                      color: Colors.blueAccent,
+                    ),
+                    title: Text(
+                      context.locale.languageCode == 'ky'
+                          ? 'Сатып алууну калыбына келтирүү'
+                          : 'Восстановить покупки',
+                    ),
+                    onTap: _isPurchasesBusy ? null : _restorePurchases,
+                  ),
+                  const Divider(height: 1),
                   ListTile(
                     leading: const Icon(
                       Icons.feedback_outlined,
