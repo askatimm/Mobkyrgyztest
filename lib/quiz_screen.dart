@@ -164,7 +164,7 @@ class _QuizScreenState extends State<QuizScreen>
 
     try {
       final usage = await _aiUsageService.tryConsumeCheck(
-        topicId: currentTask.id,
+        topicId: _aiUsageTopicId(currentTask.id),
       );
 
       if (usage == null) {
@@ -350,9 +350,15 @@ class _QuizScreenState extends State<QuizScreen>
     return 500;
   }
 
+  String _aiUsageTopicId(String taskId) {
+    return '${widget.levelId}_${widget.subTestId}_$taskId';
+  }
+
   Future<void> _loadAiUsageForTask(String taskId) async {
     try {
-      final usage = await _aiUsageService.getUsage(topicId: taskId);
+      final usage = await _aiUsageService.getUsage(
+        topicId: _aiUsageTopicId(taskId),
+      );
 
       if (!mounted ||
           _tasks.isEmpty ||
@@ -606,7 +612,13 @@ class _QuizScreenState extends State<QuizScreen>
       if (_isGapWritingLevel) {
         final count = task.answers?.length ?? 0;
         _gapControllers = List.generate(count, (_) => TextEditingController());
-        _gapFocusNodes = List.generate(count, (_) => FocusNode());
+        _gapFocusNodes = List.generate(count, (gapIndex) {
+          final focusNode = FocusNode();
+          focusNode.addListener(
+            () => _handleWritingGapFocusChange(gapIndex),
+          );
+          return focusNode;
+        });
         _hintedGapCharacterIndexes = List.generate(count, (_) => <int>{});
         _gapResults = List.generate(count, (_) => null);
 
@@ -678,10 +690,9 @@ class _QuizScreenState extends State<QuizScreen>
         : '';
     final builtInHintLength = hint.isNotEmpty ? 1 : 0;
 
-    return (answers[gapIndex].length - builtInHintLength).clamp(
-      0,
-      answers[gapIndex].length,
-    );
+    return (answers[gapIndex].length - builtInHintLength)
+        .clamp(0, answers[gapIndex].length)
+        .toInt();
   }
 
   int? _findIncompleteWritingGap({int startIndex = 0}) {
@@ -705,6 +716,18 @@ class _QuizScreenState extends State<QuizScreen>
     final gapIndex = _findIncompleteWritingGap();
     if (gapIndex != null) {
       _focusWritingGap(gapIndex);
+    }
+  }
+
+  void _handleWritingGapFocusChange(int gapIndex) {
+    if (!mounted || gapIndex >= _gapFocusNodes.length) return;
+
+    final hasFocus = _gapFocusNodes[gapIndex].hasFocus;
+
+    if (hasFocus && _activeGapIndex != gapIndex) {
+      setState(() => _activeGapIndex = gapIndex);
+    } else if (!hasFocus && _activeGapIndex == gapIndex) {
+      setState(() => _activeGapIndex = null);
     }
   }
 
