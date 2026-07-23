@@ -313,6 +313,7 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   List<TextEditingController> _gapControllers = [];
+  List<Set<int>> _hintedGapCharacterIndexes = [];
   bool _isWritingAnswered = false;
 
   bool get _isGapWritingLevel {
@@ -454,6 +455,7 @@ class _QuizScreenState extends State<QuizScreen> {
       controller.dispose();
     }
     _gapControllers.clear();
+    _hintedGapCharacterIndexes.clear();
   }
 
   Future<List<QuizTask>> _loadTasks() async {
@@ -554,6 +556,7 @@ class _QuizScreenState extends State<QuizScreen> {
       if (_isGapWritingLevel) {
         final count = task.answers?.length ?? 0;
         _gapControllers = List.generate(count, (_) => TextEditingController());
+        _hintedGapCharacterIndexes = List.generate(count, (_) => <int>{});
         _gapResults = List.generate(count, (_) => null);
       } else if (_isAiEssayLevel) {
         // Для B2/C1 ничего дополнительно не нужно:
@@ -599,6 +602,96 @@ class _QuizScreenState extends State<QuizScreen> {
     return _gapControllers.every((c) => c.text.trim().isNotEmpty);
   }
 
+  bool get _hasAvailableWritingHint {
+    if (!_isGapWritingLevel ||
+        _isWritingAnswered ||
+        _tasks.isEmpty ||
+        _gapControllers.isEmpty) {
+      return false;
+    }
+
+    final task = _tasks[_currentIndex];
+    final answers = task.answers ?? [];
+
+    for (int gapIndex = 0;
+        gapIndex < answers.length && gapIndex < _gapControllers.length;
+        gapIndex++) {
+      final hint = task.hints != null && gapIndex < task.hints!.length
+          ? task.hints![gapIndex]
+          : '';
+      final builtInHintLength = hint.isNotEmpty ? 1 : 0;
+      final editableLength = answers[gapIndex].length - builtInHintLength;
+
+      if (_gapControllers[gapIndex].text.length < editableLength) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  void _revealNextWritingHint() {
+    if (!_hasAvailableWritingHint) return;
+
+    FocusScope.of(context).unfocus();
+
+    final task = _tasks[_currentIndex];
+    final answers = task.answers ?? [];
+
+    for (int gapIndex = 0;
+        gapIndex < answers.length && gapIndex < _gapControllers.length;
+        gapIndex++) {
+      final controller = _gapControllers[gapIndex];
+      final hint = task.hints != null && gapIndex < task.hints!.length
+          ? task.hints![gapIndex]
+          : '';
+      final builtInHintLength = hint.isNotEmpty ? 1 : 0;
+      final editableLength = answers[gapIndex].length - builtInHintLength;
+
+      if (controller.text.length >= editableLength) continue;
+
+      final controllerIndex = controller.text.length;
+      final answerIndex = builtInHintLength + controllerIndex;
+      final revealedCharacter = answers[gapIndex][answerIndex];
+      final updatedText = '${controller.text}$revealedCharacter';
+
+      controller.value = TextEditingValue(
+        text: updatedText,
+        selection: TextSelection.collapsed(offset: updatedText.length),
+      );
+
+      setState(() {
+        _hintedGapCharacterIndexes[gapIndex].add(controllerIndex);
+      });
+      return;
+    }
+  }
+
+  void _syncHintedCharacterIndexes(int gapIndex, String text) {
+    if (gapIndex >= _hintedGapCharacterIndexes.length ||
+        _tasks.isEmpty ||
+        _currentIndex >= _tasks.length) {
+      return;
+    }
+
+    final task = _tasks[_currentIndex];
+    final answers = task.answers ?? [];
+    if (gapIndex >= answers.length) return;
+
+    final hint = task.hints != null && gapIndex < task.hints!.length
+        ? task.hints![gapIndex]
+        : '';
+    final builtInHintLength = hint.isNotEmpty ? 1 : 0;
+    final correctAnswer = answers[gapIndex];
+
+    _hintedGapCharacterIndexes[gapIndex].removeWhere((controllerIndex) {
+      final answerIndex = builtInHintLength + controllerIndex;
+      return controllerIndex >= text.length ||
+          answerIndex >= correctAnswer.length ||
+          text[controllerIndex] != correctAnswer[answerIndex];
+    });
+  }
+
   void _checkWritingAnswersPerGap(QuizTask task) {
     final correctAnswers = task.answers ?? [];
 
@@ -634,8 +727,8 @@ class _QuizScreenState extends State<QuizScreen> {
     int gapIndex,
     String hint,
   ) {
-    const double boxWidth = 18;
-    const double boxHeight = 24;
+    const double boxWidth = 20;
+    const double boxHeight = 28;
     const double gap = 2;
 
     Color borderColor = Colors.grey.shade400;
@@ -661,32 +754,72 @@ class _QuizScreenState extends State<QuizScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: List.generate(boxCount, (index) {
                   String displayChar = '';
+                  int? controllerIndex;
 
-                  if (hint.isNotEmpty && index == 0) {
+                  final isBuiltInHint = hint.isNotEmpty && index == 0;
+
+                  if (isBuiltInHint) {
                     displayChar = hint;
                   } else {
-                    final textIndex = hint.isNotEmpty ? index - 1 : index;
-                    if (textIndex >= 0 && textIndex < controller.text.length) {
-                      displayChar = controller.text[textIndex];
+                    controllerIndex = hint.isNotEmpty ? index - 1 : index;
+                    if (controllerIndex >= 0 &&
+                        controllerIndex < controller.text.length) {
+                      displayChar = controller.text[controllerIndex];
                     }
                   }
+
+                  final isRevealedByButton =
+                      controllerIndex != null &&
+                      gapIndex < _hintedGapCharacterIndexes.length &&
+                      _hintedGapCharacterIndexes[gapIndex].contains(
+                        controllerIndex,
+                      );
+                  final isHintCell = isBuiltInHint || isRevealedByButton;
+
+                  final cellBorderColor = isHintCell && !_isWritingAnswered
+                      ? const Color(0xFF38A3DB)
+                      : borderColor;
 
                   return Container(
                     width: boxWidth,
                     height: boxHeight,
                     margin: const EdgeInsets.only(right: gap),
                     decoration: BoxDecoration(
-                      border: Border.all(color: borderColor),
-                      borderRadius: BorderRadius.circular(5),
-                      color: Colors.white,
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      displayChar,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
+                      border: Border.all(
+                        color: cellBorderColor,
+                        width: isHintCell ? 1.5 : 1,
                       ),
+                      borderRadius: BorderRadius.circular(5),
+                      color: isHintCell
+                          ? const Color(0xFFE4F6FF)
+                          : Colors.white,
+                    ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Text(
+                          displayChar,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: isHintCell
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            color: isHintCell
+                                ? const Color(0xFF087EB8)
+                                : Colors.black87,
+                          ),
+                        ),
+                        if (isHintCell)
+                          const Positioned(
+                            top: 1,
+                            right: 1,
+                            child: Icon(
+                              Icons.lightbulb_rounded,
+                              size: 7,
+                              color: Color(0xFF20A060),
+                            ),
+                          ),
+                      ],
                     ),
                   );
                 }),
@@ -699,7 +832,8 @@ class _QuizScreenState extends State<QuizScreen> {
                     controller: controller,
                     enabled: !_isWritingAnswered,
                     maxLength: hint.isNotEmpty ? boxCount - 1 : boxCount,
-                    onChanged: (_) {
+                    onChanged: (value) {
+                      _syncHintedCharacterIndexes(gapIndex, value);
                       setState(() {});
                     },
                     decoration: const InputDecoration(
@@ -887,6 +1021,35 @@ class _QuizScreenState extends State<QuizScreen> {
         title: Text(widget.subTestTitle),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        actions: [
+          if (_isGapWritingLevel)
+            Padding(
+              padding: const EdgeInsets.only(right: 12, top: 7, bottom: 7),
+              child: OutlinedButton.icon(
+                onPressed:
+                    _hasAvailableWritingHint ? _revealNextWritingHint : null,
+                icon: const Icon(Icons.lightbulb_outline_rounded, size: 19),
+                label: Text('hint_button'.tr()),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF38A05A),
+                  disabledForegroundColor: Colors.grey.shade400,
+                  backgroundColor: Colors.white.withValues(alpha: 0.42),
+                  side: BorderSide(
+                    color: _hasAvailableWritingHint
+                        ? const Color(0xFF8CCEA2)
+                        : Colors.grey.shade300,
+                    width: 1.4,
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  shape: const StadiumBorder(),
+                  textStyle: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
       extendBodyBehindAppBar: true,
       body: Container(
