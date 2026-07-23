@@ -163,31 +163,22 @@ class _QuizScreenState extends State<QuizScreen>
     });
 
     try {
-      final usage = await _aiUsageService.tryConsumeCheck(
-        topicId: _aiUsageTopicId(currentTask.id),
-      );
-
-      if (usage == null) {
+      if (_remainingAiChecks <= 0) {
         if (!mounted) return;
 
-        setState(() => _remainingAiChecks = 0);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('ai_checks_limit_reached'.tr())),
         );
         return;
       }
 
-      if (!mounted) return;
-      setState(() {
-        _remainingAiChecks = usage.remainingChecks;
-        _isLoadingAiUsage = false;
-      });
-
       debugPrint("TOPIC SENT: ${currentTask.question}");
       final review = await _aiWritingService.checkEssay(
         context: context,
         essay: text,
         targetLevel: _getAiTargetLevel(),
+        levelId: widget.levelId,
+        taskId: currentTask.id,
         topic: currentTask.question,
       );
 
@@ -208,7 +199,17 @@ class _QuizScreenState extends State<QuizScreen>
       setState(() {
         _essayReview = review;
         _essayChecked = true;
+        _remainingAiChecks = (_remainingAiChecks - 1)
+            .clamp(0, _maxAiChecksPerTopic)
+            .toInt();
       });
+    } on AiCheckLimitException {
+      if (!mounted) return;
+
+      setState(() => _remainingAiChecks = 0);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('ai_checks_limit_reached'.tr())),
+      );
     } catch (e) {
       if (!mounted) return;
 
@@ -216,6 +217,8 @@ class _QuizScreenState extends State<QuizScreen>
         context,
       ).showSnackBar(SnackBar(content: Text('Ошибка AI-проверки: $e')));
     } finally {
+      await _loadAiUsageForTask(currentTask.id);
+
       if (mounted) {
         setState(() {
           _isCheckingEssay = false;
@@ -380,7 +383,6 @@ class _QuizScreenState extends State<QuizScreen>
       }
 
       setState(() {
-        _remainingAiChecks = _maxAiChecksPerTopic;
         _isLoadingAiUsage = false;
       });
     }
