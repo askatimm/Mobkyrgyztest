@@ -13,17 +13,16 @@ class AiUsage {
     required this.userId,
   });
 
-  bool get canUseAi => isPremium || usedChecks < maxChecks;
+  bool get canUseAi => usedChecks < maxChecks;
 
   int get remainingChecks {
-    if (isPremium) return 9999;
     return (maxChecks - usedChecks).clamp(0, maxChecks);
   }
 
   factory AiUsage.fromMap(Map<String, dynamic> map) {
     return AiUsage(
       usedChecks: map['usedChecks'] ?? 0,
-      maxChecks: map['maxChecks'] ?? 5,
+      maxChecks: map['maxChecks'] ?? 4,
       isPremium: map['isPremium'] ?? false,
       topicId: (map['topicId'] ?? '').toString(),
       userId: (map['userId'] ?? '').toString(),
