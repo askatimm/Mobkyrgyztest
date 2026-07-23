@@ -1022,7 +1022,7 @@ class _QuizScreenState extends State<QuizScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
-          if (_isGapWritingLevel)
+          if (widget.subTestId == 'writing' && _isGapWritingLevel)
             Padding(
               padding: const EdgeInsets.only(right: 12, top: 7, bottom: 7),
               child: OutlinedButton.icon(
