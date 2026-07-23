@@ -12,6 +12,7 @@ import '../models/essay_review.dart';
 import '../services/ai_writing_service.dart';
 import '../services/ai_usage_service.dart';
 import '../services/daily_topic_service.dart';
+import '../services/premium_service.dart';
 import 'screens/daily_limit_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -154,6 +155,25 @@ class _QuizScreenState extends State<QuizScreen>
         ),
       );
       return;
+    }
+
+    final hasPremium = await PremiumService.isPremiumUser();
+    if (!hasPremium) {
+      final unlocked = await PremiumService.showPaywall();
+      if (!mounted) return;
+
+      if (!unlocked) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'AI текшерүү Premium колдонуучулар үчүн гана жеткиликтүү',
+            ),
+          ),
+        );
+        return;
+      }
+
+      setState(() {});
     }
 
     setState(() {
@@ -1495,56 +1515,55 @@ class _QuizScreenState extends State<QuizScreen>
               ],
             ),
           ),
-          // FutureBuilder<bool>(
-          //   future: _userService.isPremium(),
-          //   builder: (context, snapshot) {
-          //     final isPremium = snapshot.data ?? false;
+          FutureBuilder<bool>(
+            future: PremiumService.isPremiumUser(),
+            builder: (context, snapshot) {
+              final isPremium = snapshot.data ?? false;
+              if (isPremium) return const SizedBox.shrink();
 
-          //     if (isPremium) return const SizedBox.shrink();
-
-          //     return Container(
-          //       width: double.infinity,
-          //       margin: const EdgeInsets.only(bottom: 16),
-          //       padding: const EdgeInsets.all(14),
-          //       decoration: BoxDecoration(
-          //         color: const Color(0xFFFFF3CD),
-          //         borderRadius: BorderRadius.circular(14),
-          //         border: Border.all(color: const Color(0xFFFFD54F)),
-          //       ),
-          //       child: Column(
-          //         crossAxisAlignment: CrossAxisAlignment.start,
-          //         children: [
-          //           const Row(
-          //             children: [
-          //               Icon(Icons.lock, color: Colors.orange),
-          //               SizedBox(width: 8),
-          //               Expanded(
-          //                 child: Text(
-          //                   'AI текшерүү Premium колдонуучулар үчүн гана жеткиликтүү',
-          //                   style: TextStyle(
-          //                     fontWeight: FontWeight.bold,
-          //                     fontSize: 14,
-          //                   ),
-          //                 ),
-          //               ),
-          //             ],
-          //           ),
-          //           const SizedBox(height: 10),
-          //           SizedBox(
-          //             width: double.infinity,
-          //             child: ElevatedButton(
-          //               onPressed: () async {
-          //                 await PremiumService.showPaywall();
-          //                 setState(() {});
-          //               },
-          //               child: const Text('Премиум сатып алуу'),
-          //             ),
-          //           ),
-          //         ],
-          //       ),
-          //     );
-          //   },
-          // ),
+              return Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF3CD),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFFFD54F)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.lock, color: Colors.orange),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'AI текшерүү Premium колдонуучулар үчүн гана жеткиликтүү',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          await PremiumService.showPaywall();
+                          if (mounted) setState(() {});
+                        },
+                        child: const Text('Премиум сатып алуу'),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
           Text(
             task.question,
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
