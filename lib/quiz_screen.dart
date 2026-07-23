@@ -11,11 +11,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/essay_review.dart';
 import '../services/ai_writing_service.dart';
 import '../services/ai_usage_service.dart';
-import '../services/premium_service.dart';
 import '../services/daily_topic_service.dart';
 import 'screens/daily_limit_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../services/user_service.dart';
 
 // --- Модель QuizTask ---
 class QuizTask {
@@ -94,7 +92,8 @@ class QuizScreen extends StatefulWidget {
   State<QuizScreen> createState() => _QuizScreenState();
 }
 
-class _QuizScreenState extends State<QuizScreen> {
+class _QuizScreenState extends State<QuizScreen>
+    with SingleTickerProviderStateMixin {
   late Future<List<QuizTask>> _tasksFuture;
   List<QuizTask> _tasks = [];
   int _currentIndex = 0;
@@ -108,9 +107,13 @@ class _QuizScreenState extends State<QuizScreen> {
   final AiWritingService _aiWritingService = AiWritingService();
   final AiUsageService _aiUsageService = AiUsageService();
   final DailyTopicService _dailyTopicService = DailyTopicService();
-  final UserService _userService = UserService();
+
+  static const int _maxAiChecksPerTopic =
+      AiUsageService.maxChecksPerTopic;
 
   bool _isCheckingEssay = false;
+  bool _isLoadingAiUsage = false;
+  int _remainingAiChecks = _maxAiChecksPerTopic;
   EssayReview? _essayReview;
   bool _essayChecked = false;
 
@@ -118,31 +121,6 @@ class _QuizScreenState extends State<QuizScreen> {
     final text = _writingController.text.trim();
 
     final currentTask = _tasks[_currentIndex];
-
-    final isPremium = await _userService.isPremium();
-
-    bool canUseAi = true;
-
-    // 👇 только для AI writing
-    // if (_isAiEssayLevel) {
-    //   if (!isPremium) {
-    //     await PremiumService.showPaywall();
-    //     return;
-    //   }
-
-    //   canUseAi = await _aiUsageService.canUseAi(topicId: currentTask.id);
-
-    //   if (!canUseAi) {
-    //     if (!mounted) return;
-
-    //     ScaffoldMessenger.of(context).showSnackBar(
-    //       const SnackBar(
-    //         content: Text('Бул тема боюнча AI текшерүү лимити бүттү.'),
-    //       ),
-    //     );
-    //     return;
-    //   }
-    // }
 
     if (text.isEmpty) {
       if (!mounted) return;
@@ -185,7 +163,25 @@ class _QuizScreenState extends State<QuizScreen> {
     });
 
     try {
+      final usage = await _aiUsageService.tryConsumeCheck(
+        topicId: currentTask.id,
+      );
+
+      if (usage == null) {
+        if (!mounted) return;
+
+        setState(() => _remainingAiChecks = 0);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('ai_checks_limit_reached'.tr())),
+        );
+        return;
+      }
+
       if (!mounted) return;
+      setState(() {
+        _remainingAiChecks = usage.remainingChecks;
+        _isLoadingAiUsage = false;
+      });
 
       debugPrint("TOPIC SENT: ${currentTask.question}");
       final review = await _aiWritingService.checkEssay(
@@ -208,8 +204,6 @@ class _QuizScreenState extends State<QuizScreen> {
               'completedTaskIds': FieldValue.arrayUnion([currentTask.id]),
             }, SetOptions(merge: true));
       }
-
-      //await _aiUsageService.increaseUsage(topicId: currentTask.id);
 
       setState(() {
         _essayReview = review;
@@ -313,7 +307,11 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   List<TextEditingController> _gapControllers = [];
+  List<FocusNode> _gapFocusNodes = [];
   List<Set<int>> _hintedGapCharacterIndexes = [];
+  int? _activeGapIndex;
+  late final AnimationController _cursorBlinkController;
+  late final Animation<double> _cursorOpacity;
   bool _isWritingAnswered = false;
 
   bool get _isGapWritingLevel {
@@ -350,6 +348,36 @@ class _QuizScreenState extends State<QuizScreen> {
     if (level == 'level_b2') return 800;
 
     return 500;
+  }
+
+  Future<void> _loadAiUsageForTask(String taskId) async {
+    try {
+      final usage = await _aiUsageService.getUsage(topicId: taskId);
+
+      if (!mounted ||
+          _tasks.isEmpty ||
+          _currentIndex >= _tasks.length ||
+          _tasks[_currentIndex].id != taskId) {
+        return;
+      }
+
+      setState(() {
+        _remainingAiChecks = usage.remainingChecks;
+        _isLoadingAiUsage = false;
+      });
+    } catch (_) {
+      if (!mounted ||
+          _tasks.isEmpty ||
+          _currentIndex >= _tasks.length ||
+          _tasks[_currentIndex].id != taskId) {
+        return;
+      }
+
+      setState(() {
+        _remainingAiChecks = _maxAiChecksPerTopic;
+        _isLoadingAiUsage = false;
+      });
+    }
   }
 
   int _getTaskLimit() {
@@ -408,6 +436,17 @@ class _QuizScreenState extends State<QuizScreen> {
   @override
   void initState() {
     super.initState();
+
+    _cursorBlinkController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 620),
+    );
+    _cursorOpacity = CurvedAnimation(
+      parent: _cursorBlinkController,
+      curve: Curves.easeInOut,
+    );
+    _cursorBlinkController.repeat(reverse: true);
+
     _tasksFuture = _loadTasks().then((loadedTasks) {
       if (mounted) {
         _prepareCurrentTask();
@@ -449,6 +488,7 @@ class _QuizScreenState extends State<QuizScreen> {
     _userPlayer.dispose();
     _recorder.dispose();
     _writingController.dispose();
+    _cursorBlinkController.dispose();
     _disposeGapControllers();
     super.dispose();
   }
@@ -458,7 +498,14 @@ class _QuizScreenState extends State<QuizScreen> {
       controller.dispose();
     }
     _gapControllers.clear();
+
+    for (final focusNode in _gapFocusNodes) {
+      focusNode.dispose();
+    }
+    _gapFocusNodes.clear();
+
     _hintedGapCharacterIndexes.clear();
+    _activeGapIndex = null;
   }
 
   Future<List<QuizTask>> _loadTasks() async {
@@ -559,11 +606,28 @@ class _QuizScreenState extends State<QuizScreen> {
       if (_isGapWritingLevel) {
         final count = task.answers?.length ?? 0;
         _gapControllers = List.generate(count, (_) => TextEditingController());
+        _gapFocusNodes = List.generate(count, (_) => FocusNode());
         _hintedGapCharacterIndexes = List.generate(count, (_) => <int>{});
         _gapResults = List.generate(count, (_) => null);
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted ||
+              _tasks.isEmpty ||
+              _currentIndex >= _tasks.length ||
+              _tasks[_currentIndex].id != task.id) {
+            return;
+          }
+          _focusFirstIncompleteWritingGap();
+        });
       } else if (_isAiEssayLevel) {
-        // Для B2/C1 ничего дополнительно не нужно:
-        // пользователь просто пишет текст в TextField
+        _remainingAiChecks = _maxAiChecksPerTopic;
+        _isLoadingAiUsage = true;
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _loadAiUsageForTask(task.id);
+          }
+        });
       } else if (task.sentence != null) {
         final words = task.sentence!
             .trim()
@@ -605,6 +669,96 @@ class _QuizScreenState extends State<QuizScreen> {
     return _gapControllers.every((c) => c.text.trim().isNotEmpty);
   }
 
+  int _editableLengthForGap(QuizTask task, int gapIndex) {
+    final answers = task.answers ?? [];
+    if (gapIndex >= answers.length) return 0;
+
+    final hint = task.hints != null && gapIndex < task.hints!.length
+        ? task.hints![gapIndex]
+        : '';
+    final builtInHintLength = hint.isNotEmpty ? 1 : 0;
+
+    return (answers[gapIndex].length - builtInHintLength).clamp(
+      0,
+      answers[gapIndex].length,
+    );
+  }
+
+  int? _findIncompleteWritingGap({int startIndex = 0}) {
+    if (_tasks.isEmpty || _currentIndex >= _tasks.length) return null;
+
+    final task = _tasks[_currentIndex];
+
+    for (int gapIndex = startIndex;
+        gapIndex < _gapControllers.length;
+        gapIndex++) {
+      if (_gapControllers[gapIndex].text.length <
+          _editableLengthForGap(task, gapIndex)) {
+        return gapIndex;
+      }
+    }
+
+    return null;
+  }
+
+  void _focusFirstIncompleteWritingGap() {
+    final gapIndex = _findIncompleteWritingGap();
+    if (gapIndex != null) {
+      _focusWritingGap(gapIndex);
+    }
+  }
+
+  void _focusWritingGap(int gapIndex) {
+    if (!mounted ||
+        gapIndex < 0 ||
+        gapIndex >= _gapControllers.length ||
+        gapIndex >= _gapFocusNodes.length) {
+      return;
+    }
+
+    final controller = _gapControllers[gapIndex];
+    controller.selection = TextSelection.collapsed(
+      offset: controller.text.length,
+    );
+
+    setState(() => _activeGapIndex = gapIndex);
+    _gapFocusNodes[gapIndex].requestFocus();
+  }
+
+  void _moveToNextWritingGap(int currentGapIndex) {
+    final nextGapIndex = _findIncompleteWritingGap(
+      startIndex: currentGapIndex + 1,
+    );
+
+    if (nextGapIndex != null) {
+      _focusWritingGap(nextGapIndex);
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+    if (mounted) {
+      setState(() => _activeGapIndex = null);
+    }
+  }
+
+  void _handleWritingGapChanged(int gapIndex, String value) {
+    _syncHintedCharacterIndexes(gapIndex, value);
+
+    if (_tasks.isEmpty || _currentIndex >= _tasks.length) {
+      setState(() {});
+      return;
+    }
+
+    final task = _tasks[_currentIndex];
+    final editableLength = _editableLengthForGap(task, gapIndex);
+
+    if (value.length >= editableLength) {
+      _moveToNextWritingGap(gapIndex);
+    } else {
+      setState(() => _activeGapIndex = gapIndex);
+    }
+  }
+
   void _revealNextWritingHint() {
     if (!_isGapWritingLevel ||
         _isWritingAnswered ||
@@ -643,6 +797,12 @@ class _QuizScreenState extends State<QuizScreen> {
       setState(() {
         _hintedGapCharacterIndexes[gapIndex].add(controllerIndex);
       });
+
+      if (updatedText.length >= editableLength) {
+        _moveToNextWritingGap(gapIndex);
+      } else {
+        _focusWritingGap(gapIndex);
+      }
       return;
     }
   }
@@ -703,6 +863,7 @@ class _QuizScreenState extends State<QuizScreen> {
 
   Widget _buildLetterBoxesField(
     TextEditingController controller,
+    FocusNode focusNode,
     int boxCount,
     int gapIndex,
     String hint,
@@ -755,6 +916,14 @@ class _QuizScreenState extends State<QuizScreen> {
                         controllerIndex,
                       );
                   final isHintCell = isBuiltInHint || isRevealedByButton;
+                  final cursorBoxIndex =
+                      (hint.isNotEmpty ? 1 : 0) + controller.text.length;
+                  final isActiveCursor =
+                      !_isWritingAnswered &&
+                      _activeGapIndex == gapIndex &&
+                      focusNode.hasFocus &&
+                      index == cursorBoxIndex &&
+                      displayChar.isEmpty;
 
                   final cellBorderColor = isHintCell && !_isWritingAnswered
                       ? const Color(0xFF38A3DB)
@@ -789,6 +958,18 @@ class _QuizScreenState extends State<QuizScreen> {
                                 : Colors.black87,
                           ),
                         ),
+                        if (isActiveCursor)
+                          FadeTransition(
+                            opacity: _cursorOpacity,
+                            child: Container(
+                              width: 1.8,
+                              height: 17,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1677E8),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ),
                         if (isHintCell)
                           const Positioned(
                             top: 1,
@@ -810,11 +991,24 @@ class _QuizScreenState extends State<QuizScreen> {
                   width: boxCount * (boxWidth + gap),
                   child: TextField(
                     controller: controller,
+                    focusNode: focusNode,
                     enabled: !_isWritingAnswered,
+                    showCursor: false,
                     maxLength: hint.isNotEmpty ? boxCount - 1 : boxCount,
+                    textInputAction: gapIndex < _gapControllers.length - 1
+                        ? TextInputAction.next
+                        : TextInputAction.done,
+                    onTap: () {
+                      controller.selection = TextSelection.collapsed(
+                        offset: controller.text.length,
+                      );
+                      setState(() => _activeGapIndex = gapIndex);
+                    },
                     onChanged: (value) {
-                      _syncHintedCharacterIndexes(gapIndex, value);
-                      setState(() {});
+                      _handleWritingGapChanged(gapIndex, value);
+                    },
+                    onEditingComplete: () {
+                      _moveToNextWritingGap(gapIndex);
                     },
                     decoration: const InputDecoration(
                       counterText: '',
@@ -1144,6 +1338,7 @@ class _QuizScreenState extends State<QuizScreen> {
         widgets.add(
           _buildLetterBoxesField(
             _gapControllers[currentGap],
+            _gapFocusNodes[currentGap],
             boxCount,
             currentGap,
             hint,
@@ -1204,9 +1399,61 @@ class _QuizScreenState extends State<QuizScreen> {
     }
 
     if (_isAiEssayLevel) {
+      final limitReached = _remainingAiChecks <= 0;
+
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: limitReached
+                  ? const Color(0xFFFFECEC)
+                  : const Color(0xFFEAF7EF),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: limitReached
+                    ? const Color(0xFFE57373)
+                    : const Color(0xFF83C99A),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  limitReached
+                      ? Icons.block_rounded
+                      : Icons.auto_awesome_rounded,
+                  color: limitReached
+                      ? const Color(0xFFC62828)
+                      : const Color(0xFF268447),
+                  size: 21,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    limitReached
+                        ? 'ai_checks_limit_reached'.tr()
+                        : '${'ai_checks_remaining'.tr()}: '
+                              '$_remainingAiChecks/$_maxAiChecksPerTopic',
+                    style: TextStyle(
+                      color: limitReached
+                          ? const Color(0xFFC62828)
+                          : const Color(0xFF23683A),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                if (_isLoadingAiUsage)
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+              ],
+            ),
+          ),
           // FutureBuilder<bool>(
           //   future: _userService.isPremium(),
           //   builder: (context, snapshot) {
@@ -1760,7 +2007,9 @@ class _QuizScreenState extends State<QuizScreen> {
                     backgroundColor: Colors.blue,
                     shape: const StadiumBorder(),
                   ),
-                  onPressed: (_isCheckingEssay)
+                  onPressed: (_isCheckingEssay ||
+                          _isLoadingAiUsage ||
+                          _remainingAiChecks <= 0)
                       ? null
                       : () async {
                           FocusScope.of(context).unfocus();
