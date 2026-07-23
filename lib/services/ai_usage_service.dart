@@ -24,7 +24,7 @@ class AiUsageService {
     final usedChecks = rawUsedChecks is num ? rawUsedChecks.toInt() : 0;
 
     return AiUsage(
-      usedChecks: usedChecks.clamp(0, maxChecksPerTopic),
+      usedChecks: usedChecks.clamp(0, maxChecksPerTopic).toInt(),
       maxChecks: maxChecksPerTopic,
       isPremium: data?['isPremium'] == true,
       topicId: topicId,
