@@ -1,5 +1,6 @@
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { defineSecret } = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
@@ -10,11 +11,12 @@ const db = getFirestore();
 const MAX_AI_CHECKS_PER_TOPIC = 4;
 const MAX_AI_CHECKS_PER_LEVEL = 20;
 const REVENUECAT_ENTITLEMENT_ID = "KyrgyzTest Pro";
+const revenueCatSecret = defineSecret("REVENUECAT_SECRET_API_KEY");
 
 setGlobalOptions({ maxInstances: 10 });
 
 async function hasActivePremium(appUserId) {
-  const apiKey = process.env.REVENUECAT_SECRET_API_KEY;
+  const apiKey = revenueCatSecret.value();
 
   if (!apiKey) {
     throw new HttpsError(
@@ -230,6 +232,7 @@ exports.checkEssay = onCall(
   {
     region: "us-central1",
     invoker: "public",
+    secrets: [revenueCatSecret],
   },
   async (request) => {
     logger.info("checkEssay START", {
