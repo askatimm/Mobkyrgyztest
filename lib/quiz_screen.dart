@@ -409,7 +409,10 @@ class _QuizScreenState extends State<QuizScreen> {
   void initState() {
     super.initState();
     _tasksFuture = _loadTasks().then((loadedTasks) {
-      if (mounted) _prepareCurrentTask();
+      if (mounted) {
+        _prepareCurrentTask();
+        setState(() {});
+      }
       return loadedTasks;
     });
 
@@ -602,36 +605,13 @@ class _QuizScreenState extends State<QuizScreen> {
     return _gapControllers.every((c) => c.text.trim().isNotEmpty);
   }
 
-  bool get _hasAvailableWritingHint {
+  void _revealNextWritingHint() {
     if (!_isGapWritingLevel ||
         _isWritingAnswered ||
         _tasks.isEmpty ||
         _gapControllers.isEmpty) {
-      return false;
+      return;
     }
-
-    final task = _tasks[_currentIndex];
-    final answers = task.answers ?? [];
-
-    for (int gapIndex = 0;
-        gapIndex < answers.length && gapIndex < _gapControllers.length;
-        gapIndex++) {
-      final hint = task.hints != null && gapIndex < task.hints!.length
-          ? task.hints![gapIndex]
-          : '';
-      final builtInHintLength = hint.isNotEmpty ? 1 : 0;
-      final editableLength = answers[gapIndex].length - builtInHintLength;
-
-      if (_gapControllers[gapIndex].text.length < editableLength) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  void _revealNextWritingHint() {
-    if (!_hasAvailableWritingHint) return;
 
     FocusScope.of(context).unfocus();
 
@@ -1027,17 +1007,15 @@ class _QuizScreenState extends State<QuizScreen> {
               padding: const EdgeInsets.only(right: 12, top: 7, bottom: 7),
               child: OutlinedButton.icon(
                 onPressed:
-                    _hasAvailableWritingHint ? _revealNextWritingHint : null,
+                    _isWritingAnswered ? null : _revealNextWritingHint,
                 icon: const Icon(Icons.lightbulb_outline_rounded, size: 19),
                 label: Text('hint_button'.tr()),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFF38A05A),
                   disabledForegroundColor: Colors.grey.shade400,
                   backgroundColor: Colors.white.withValues(alpha: 0.42),
-                  side: BorderSide(
-                    color: _hasAvailableWritingHint
-                        ? const Color(0xFF8CCEA2)
-                        : Colors.grey.shade300,
+                  side: const BorderSide(
+                    color: Color(0xFF8CCEA2),
                     width: 1.4,
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 14),
