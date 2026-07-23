@@ -677,8 +677,24 @@ class _QuizScreenState extends State<QuizScreen>
   }
 
   bool _areAllGapsFilled() {
-    if (_gapControllers.isEmpty) return false;
-    return _gapControllers.every((c) => c.text.trim().isNotEmpty);
+    if (_tasks.isEmpty ||
+        _currentIndex >= _tasks.length ||
+        _gapControllers.isEmpty) {
+      return false;
+    }
+
+    final task = _tasks[_currentIndex];
+
+    for (int gapIndex = 0;
+        gapIndex < _gapControllers.length;
+        gapIndex++) {
+      if (_gapControllers[gapIndex].text.length <
+          _editableLengthForGap(task, gapIndex)) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   int _editableLengthForGap(QuizTask task, int gapIndex) {
@@ -803,7 +819,7 @@ class _QuizScreenState extends State<QuizScreen>
           ? task.hints![gapIndex]
           : '';
       final builtInHintLength = hint.isNotEmpty ? 1 : 0;
-      final editableLength = answers[gapIndex].length - builtInHintLength;
+      final editableLength = _editableLengthForGap(task, gapIndex);
 
       if (controller.text.length >= editableLength) continue;
 
@@ -2037,28 +2053,6 @@ class _QuizScreenState extends State<QuizScreen>
                       : () async {
                           FocusScope.of(context).unfocus();
 
-                          final currentTask = _tasks[_currentIndex];
-
-                          bool canUseAi = true;
-
-                          // if (_isAiEssayLevel) {
-                          //   canUseAi = await _aiUsageService.canUseAi(
-                          //     topicId: currentTask.id,
-                          //   );
-                          // }
-
-                          // if (!canUseAi &&
-                          //     widget.subTestId == 'writing' &&
-                          //     _isAiEssayLevel) {
-                          //       if (!mounted) return;
-                          //   Navigator.push(
-                          //     context,
-                          //     MaterialPageRoute(
-                          //       builder: (_) => const DailyLimitScreen(),
-                          //     ),
-                          //   );
-                          //   return;
-                          // }
                           await _checkEssayWithAi();
                         },
                   child: _isCheckingEssay
