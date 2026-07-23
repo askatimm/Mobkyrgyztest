@@ -14,7 +14,6 @@ final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await PremiumService.init();
 
   // Блокируем ориентацию
   await SystemChrome.setPreferredOrientations([
@@ -24,6 +23,8 @@ void main() async {
 
   await EasyLocalization.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await PremiumService.init();
+  await PremiumService.syncUserWithRevenueCat();
 
   runApp(
     EasyLocalization(
