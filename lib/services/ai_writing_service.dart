@@ -3,6 +3,10 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/widgets.dart';
 import '../models/essay_review.dart';
 
+class AiCheckLimitException implements Exception {
+  const AiCheckLimitException();
+}
+
 class AiWritingService {
   final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
     region: 'us-central1',
@@ -12,6 +16,8 @@ class AiWritingService {
     required BuildContext context,
     required String essay,
     required String targetLevel,
+    required String levelId,
+    required String taskId,
     String topic = '',
   }) async {
     try {
@@ -27,6 +33,8 @@ class AiWritingService {
       final result = await callable.call({
         'essay': essay,
         'targetLevel': targetLevel,
+        'levelId': levelId,
+        'taskId': taskId,
         'topic': topic,
         'uiLanguage': uiLanguage,
       });
@@ -37,6 +45,12 @@ class AiWritingService {
     } on FirebaseFunctionsException catch (e) {
       final code = e.code;
       final message = (e.message ?? '').toLowerCase();
+
+      if (code == 'resource-exhausted' &&
+          (message.contains('ai_check_limit_reached') ||
+              message.contains('ai_total_limit_reached'))) {
+        throw const AiCheckLimitException();
+      }
 
       // 429 Too Many Requests
       if (code == 'resource-exhausted' ||
