@@ -45,6 +45,7 @@ class PremiumService {
   static Future<bool> isPremiumUser() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
+      if (user == null || user.isAnonymous) return false;
 
       // Локальный debug-доступ владельца. В release-сборке не работает.
       if (kDebugMode && user?.email == 'askatimm@gmail.com') {
@@ -64,6 +65,10 @@ class PremiumService {
   /// Показывает RevenueCat Paywall и возвращает актуальный Premium-статус.
   static Future<bool> showPaywall() async {
     try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null || user.isAnonymous) return false;
+
+      await syncUserWithRevenueCat();
       await RevenueCatUI.presentPaywall();
       final customerInfo = await Purchases.getCustomerInfo();
       return _hasPremium(customerInfo);
@@ -78,6 +83,10 @@ class PremiumService {
   /// Вызывается только по нажатию пользователя «Восстановить покупки».
   static Future<bool> restorePurchases() async {
     try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null || user.isAnonymous) return false;
+
+      await syncUserWithRevenueCat();
       final customerInfo = await Purchases.restorePurchases();
       return _hasPremium(customerInfo);
     } catch (e) {
