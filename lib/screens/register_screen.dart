@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:easy_localization/easy_localization.dart';
 
 import '../home_screen.dart';
+import '../services/premium_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -76,6 +77,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           .createUserWithEmailAndPassword(email: email, password: password);
 
       await userCredential.user?.updateDisplayName(name);
+      await PremiumService.syncUserWithRevenueCat();
 
       await _goToHome();
     } on FirebaseAuthException catch (e) {
