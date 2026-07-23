@@ -102,10 +102,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
       ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          behavior: SnackBarBehavior.floating,
-        ),
+        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
       );
   }
 
@@ -270,6 +267,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                     Expanded(
                                       child: Text(
                                         'reset_social_note'.tr(),
+                                        textAlign: TextAlign.center,
                                         style: const TextStyle(
                                           fontSize: 13,
                                           height: 1.45,
