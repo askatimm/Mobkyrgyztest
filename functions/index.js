@@ -1,6 +1,14 @@
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
+const { initializeApp } = require("firebase-admin/app");
+const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+
+initializeApp();
+
+const db = getFirestore();
+const MAX_AI_CHECKS_PER_TOPIC = 4;
+const MAX_AI_CHECKS_PER_LEVEL = 20;
 
 setGlobalOptions({ maxInstances: 10 });
 
@@ -181,21 +189,141 @@ exports.checkEssay = onCall(
 
     try {
       const essay = request.data?.essay?.toString().trim() || "";
-      const targetLevel = request.data?.targetLevel?.toString() || "B2";
-      const topic = request.data?.topic?.toString() || "";
+      const levelId = request.data?.levelId?.toString() || "";
+      const taskId = request.data?.taskId?.toString() || "";
+      const requestedTopic = request.data?.topic?.toString() || "";
       const uiLanguage = request.data?.uiLanguage?.toString() || "ru";
 
-      logger.info("TOPIC FROM CLIENT:", topic);
+      if (!request.auth?.uid) {
+        throw new HttpsError(
+          "unauthenticated",
+          "Authentication is required"
+        );
+      }
 
       if (!essay) {
         throw new HttpsError("invalid-argument", "Essay is empty");
       }
+
+      if (
+        !taskId ||
+        (levelId !== "level_b2" && levelId !== "level_c1")
+      ) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Invalid writing topic"
+        );
+      }
+
+      const userId = request.auth.uid;
+      const dailyTopicRef = db
+        .collection("users")
+        .doc(userId)
+        .collection("daily_topics")
+        .doc(`${levelId}_writing`);
+      const taskRef = db
+        .collection("levels")
+        .doc(levelId)
+        .collection("sub_tests")
+        .doc("writing")
+        .collection("tasks")
+        .doc(taskId);
+
+      const [dailyTopicSnapshot, taskSnapshot] = await Promise.all([
+        dailyTopicRef.get(),
+        taskRef.get(),
+      ]);
+
+      const allowedTaskIds = dailyTopicSnapshot.exists
+        ? dailyTopicSnapshot.data()?.taskIds || []
+        : [];
+
+      if (
+        !taskSnapshot.exists ||
+        !Array.isArray(allowedTaskIds) ||
+        !allowedTaskIds.includes(taskId)
+      ) {
+        throw new HttpsError(
+          "permission-denied",
+          "Topic is not available to this user"
+        );
+      }
+
+      const targetLevel = levelId === "level_c1" ? "C1" : "B2";
+      const topic =
+        taskSnapshot.data()?.question?.toString() ||
+        requestedTopic;
+
+      logger.info("VALIDATED TOPIC:", {
+        userId,
+        levelId,
+        taskId,
+        topic,
+      });
 
       const apiKey = process.env.GEMINI_API_KEY;
 
       if (!apiKey) {
         throw new HttpsError("internal", "Missing GEMINI_API_KEY");
       }
+
+      const usageRef = db
+        .collection("ai_usage")
+        .doc(`${userId}_${levelId}_writing_${taskId}`);
+      const summaryRef = db
+        .collection("ai_usage")
+        .doc(`${userId}_${levelId}_writing_summary`);
+
+      await db.runTransaction(async (transaction) => {
+        const usageSnapshot = await transaction.get(usageRef);
+        const summarySnapshot = await transaction.get(summaryRef);
+
+        const usedChecks = Number(
+          usageSnapshot.data()?.usedChecks || 0
+        );
+        const totalChecks = Number(
+          summarySnapshot.data()?.totalChecks || 0
+        );
+
+        if (usedChecks >= MAX_AI_CHECKS_PER_TOPIC) {
+          throw new HttpsError(
+            "resource-exhausted",
+            "AI_CHECK_LIMIT_REACHED"
+          );
+        }
+
+        if (totalChecks >= MAX_AI_CHECKS_PER_LEVEL) {
+          throw new HttpsError(
+            "resource-exhausted",
+            "AI_TOTAL_LIMIT_REACHED"
+          );
+        }
+
+        transaction.set(
+          usageRef,
+          {
+            usedChecks: usedChecks + 1,
+            maxChecks: MAX_AI_CHECKS_PER_TOPIC,
+            isPremium: false,
+            topicId: `${levelId}_writing_${taskId}`,
+            userId,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+
+        transaction.set(
+          summaryRef,
+          {
+            totalChecks: totalChecks + 1,
+            maxChecks: MAX_AI_CHECKS_PER_LEVEL,
+            userId,
+            levelId,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+      });
 
       const feedbackLanguage =
         uiLanguage === "ky" ? "Kyrgyz" : "Russian";

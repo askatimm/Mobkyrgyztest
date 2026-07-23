@@ -85,6 +85,8 @@
     "type": "Тип",
     "explanation": "Объяснение",
     "check_with_ai": "Проверить",
+    "ai_checks_remaining": "Проверок осталось",
+    "ai_checks_limit_reached": "Лимит проверок для этой темы исчерпан",
     "write_your_essay_here": "Напишите эссе здесь...",
     "write_essay_first": "Сначала напишите эссе",
     "text_too_short": "Текст слишком короткий для проверки",
