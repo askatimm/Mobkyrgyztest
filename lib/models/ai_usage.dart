@@ -16,7 +16,7 @@ class AiUsage {
   bool get canUseAi => usedChecks < maxChecks;
 
   int get remainingChecks {
-    return (maxChecks - usedChecks).clamp(0, maxChecks);
+    return (maxChecks - usedChecks).clamp(0, maxChecks).toInt();
   }
 
   factory AiUsage.fromMap(Map<String, dynamic> map) {
