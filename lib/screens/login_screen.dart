@@ -83,24 +83,40 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _loginWithGoogle() async {
-    try {
-      setState(() => _isLoading = true);
+  try {
+    setState(() => _isLoading = true);
 
-      await _authService.signInWithGoogle();
-      await PremiumService.syncUserWithRevenueCat();
-      await _goToHome();
-    } catch (e) {
-      if (!mounted) return;
+    debugPrint('=== GOOGLE LOGIN START ===');
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Google аркылуу кирүү мүмкүн болгон жок')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+    await _authService.signInWithGoogle();
+
+    debugPrint('=== GOOGLE LOGIN SUCCESS ===');
+
+    await PremiumService.syncUserWithRevenueCat();
+
+    debugPrint('=== REVENUECAT SYNC SUCCESS ===');
+
+    await _goToHome();
+
+    debugPrint('=== HOME SUCCESS ===');
+  } catch (e, stack) {
+    debugPrint('=== GOOGLE LOGIN ERROR ===');
+    debugPrint('ERROR: $e');
+    debugPrint('STACK: $stack');
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Ката: $e'),
+      ),
+    );
+  } finally {
+    if (mounted) {
+      setState(() => _isLoading = false);
     }
   }
+}
 
   Future<void> _loginWithApple() async {
     try {

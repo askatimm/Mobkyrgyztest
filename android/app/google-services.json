@@ -84,6 +84,50 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:313802675672:android:e3528165ee26967261cead",
+        "android_client_info": {
+          "package_name": "kg.kyrgyztest.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "313802675672-hpfmufkiggs5487a8i0gcks0ab7i2gti.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "kg.kyrgyztest.app",
+            "certificate_hash": "61d187d44af7df4c39fee853dd4791cc9c77b896"
+          }
+        },
+        {
+          "client_id": "313802675672-f58ks1reien9qb21iiigc95sd7j7ec1p.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAAcBWV8SEitiZSNKFiyVf0qhzACRxy4nU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "313802675672-f58ks1reien9qb21iiigc95sd7j7ec1p.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "313802675672-4fi3obn0h27ori1v11q7lec9sv6896uc.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.kyrgyztestAdmin"
+              }
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"

@@ -181,11 +181,14 @@ exports.checkEssay = onCall(
   },
   async (request) => {
     logger.info("checkEssay START", {
-      hasData: !!request.data,
-      essayLength: request.data?.essay?.length || 0,
-      targetLevel: request.data?.targetLevel || null,
-      uiLanguage: request.data?.uiLanguage || null,
-    });
+  hasData: !!request.data,
+  essayLength: request.data?.essay?.length || 0,
+  targetLevel: request.data?.targetLevel || null,
+  levelId: request.data?.levelId || null,
+  taskId: request.data?.taskId || null,
+  topic: request.data?.topic || null,
+  uiLanguage: request.data?.uiLanguage || null,
+});
 
     try {
       const essay = request.data?.essay?.toString().trim() || "";

@@ -185,45 +185,48 @@ class LevelDetailScreen extends StatelessWidget {
                                 color: Colors.white.withValues(alpha: 0.2),
                               ),
                             ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              // Внутри Column в LevelDetailScreen
-                              children: [
-                                _menuItem(
-                                  Icons.menu_book,
-                                  'lex_grammar',
-                                  context,
-                                  'lexica_grammatica',
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxHeight:
+                                    MediaQuery.sizeOf(context).height * 0.62,
+                              ),
+                              child: SingleChildScrollView(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _menuItem(
+                                      Icons.menu_book,
+                                      'lex_grammar',
+                                      context,
+                                      'lexica_grammatica',
+                                    ),
+                                    _menuItem(
+                                      Icons.headphones,
+                                      'listening',
+                                      context,
+                                      'listening',
+                                    ),
+                                    _menuItem(
+                                      Icons.book,
+                                      'reading',
+                                      context,
+                                      'reading',
+                                    ),
+                                    _menuItem(
+                                      Icons.chat_bubble_outline,
+                                      'speaking',
+                                      context,
+                                      'speaking',
+                                    ),
+                                    _menuItem(
+                                      Icons.edit,
+                                      'writing',
+                                      context,
+                                      'writing',
+                                    ),
+                                  ],
                                 ),
-
-                                _menuItem(
-                                  Icons.headphones,
-                                  'listening',
-                                  context,
-                                  'listening',
-                                ),
-
-                                _menuItem(
-                                  Icons.book,
-                                  'reading',
-                                  context,
-                                  'reading',
-                                ),
-
-                                _menuItem(
-                                  Icons.chat_bubble_outline,
-                                  'speaking',
-                                  context,
-                                  'speaking',
-                                ),
-
-                                _menuItem(
-                                  Icons.edit,
-                                  'writing',
-                                  context,
-                                  'writing',
-                                ),
-                              ],
+                              ),
                             ),
                           ),
                         ),

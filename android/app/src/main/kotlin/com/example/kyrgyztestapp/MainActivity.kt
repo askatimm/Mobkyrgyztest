@@ -1,4 +1,4 @@
-package com.example.kyrgyztestapp
+package kg.kyrgyztest.app
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 
