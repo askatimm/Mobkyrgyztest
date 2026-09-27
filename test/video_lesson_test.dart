@@ -7,16 +7,16 @@ void main() {
     test('parses metadata and localized values', () {
       final lesson = VideoLesson.fromMap({
         'level': 'a1',
-        'sphere': 'private',
+        'sphere': 'personal',
         'section': 'greeting',
         'title': 'Саламдашуу',
         'titleRu': 'Приветствие',
         'description': 'Кыргызча сүрөттөмө',
         'descriptionRu': 'Описание на русском',
         'videoUrl':
-            'https://media.kyrgyztest.kg/videos/A1/private/greeting/001.mp4',
+            'https://media.kyrgyztest.kg/videos/A1/personal/greeting/001.mp4',
         'thumbnailUrl':
-            'https://media.kyrgyztest.kg/videos/A1/private/greeting/001.jpg',
+            'https://media.kyrgyztest.kg/videos/A1/personal/greeting/001.jpg',
         'duration': 180,
         'order': 1,
         'isActive': true,
@@ -33,7 +33,7 @@ void main() {
     test('rejects media outside the configured MinIO host', () {
       final lesson = VideoLesson.fromMap({
         'level': 'A1',
-        'sphere': 'private',
+        'sphere': 'personal',
         'section': 'greeting',
         'title': 'Саламдашуу',
         'description': '',
@@ -48,8 +48,8 @@ void main() {
     });
   });
 
-  test('private sphere contains the six required sections', () {
-    final sections = VideoTaxonomy.knownSections['private']!;
+  test('personal sphere contains the six required sections', () {
+    final sections = VideoTaxonomy.knownSections['personal']!;
 
     expect(
       sections.map((section) => section.code),
@@ -59,7 +59,7 @@ void main() {
         'address',
         'congratulations',
         'wishes',
-        'acquaintance',
+        'introduction',
       ]),
     );
     expect(sections, hasLength(6));

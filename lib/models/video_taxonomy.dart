@@ -34,7 +34,7 @@ class VideoTaxonomy {
 
   static const spheres = <VideoSphereOption>[
     VideoSphereOption(
-      code: 'private',
+      code: 'personal',
       ky: 'Жеке чөйрө',
       ru: 'Личная сфера',
     ),
@@ -49,14 +49,14 @@ class VideoTaxonomy {
       ru: 'Социально-культурная сфера',
     ),
     VideoSphereOption(
-      code: 'education',
+      code: 'educational',
       ky: 'Окуу чөйрөсү',
       ru: 'Учебная сфера',
     ),
   ];
 
   static const Map<String, List<VideoSectionOption>> knownSections = {
-    'private': [
+    'personal': [
       VideoSectionOption(
         code: 'greeting',
         ky: 'Саламдашуу',
@@ -83,7 +83,7 @@ class VideoTaxonomy {
         ru: 'Пожелание',
       ),
       VideoSectionOption(
-        code: 'acquaintance',
+        code: 'introduction',
         ky: 'Таанышуу',
         ru: 'Знакомство',
       ),

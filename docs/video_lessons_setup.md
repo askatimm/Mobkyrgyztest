@@ -5,25 +5,25 @@
 
 ## 1. Структура MinIO
 
-Рекомендуемая структура объектов:
+В бакете `videos` используйте следующую структуру объектов:
 
 ```text
-videos/{level}/{sphere}/{section}/{number}.mp4
-videos/{level}/{sphere}/{section}/{number}.jpg
+{level}/{sphere}/{section}/{number}.mp4
+{level}/{sphere}/{section}/{number}.jpg
 ```
 
 Пример:
 
 ```text
-videos/A1/private/greeting/001.mp4
-videos/A1/private/greeting/001.jpg
+A1/personal/greeting/001.mp4
+A1/personal/greeting/001.jpg
 ```
 
 Итоговые публичные адреса:
 
 ```text
-https://media.kyrgyztest.kg/videos/A1/private/greeting/001.mp4
-https://media.kyrgyztest.kg/videos/A1/private/greeting/001.jpg
+https://media.kyrgyztest.kg/videos/A1/personal/greeting/001.mp4
+https://media.kyrgyztest.kg/videos/A1/personal/greeting/001.jpg
 ```
 
 Для мобильного приложения нужны постоянные HTTPS-ссылки. Истекающие MinIO
@@ -38,12 +38,12 @@ backend.
 ```json
 {
   "level": "A1",
-  "sphere": "private",
+  "sphere": "personal",
   "section": "greeting",
   "title": "Саламдашуу жана таанышуу",
   "description": "Саламдашуу, таанышуу жана жөнөкөй суроолор",
-  "videoUrl": "https://media.kyrgyztest.kg/videos/A1/private/greeting/001.mp4",
-  "thumbnailUrl": "https://media.kyrgyztest.kg/videos/A1/private/greeting/001.jpg",
+  "videoUrl": "https://media.kyrgyztest.kg/videos/A1/personal/greeting/001.mp4",
+  "thumbnailUrl": "https://media.kyrgyztest.kg/videos/A1/personal/greeting/001.jpg",
   "duration": 192,
   "order": 1,
   "isActive": true
@@ -55,7 +55,7 @@ backend.
 | Поле | Тип | Пример |
 |---|---|---|
 | `level` | string | `A1` |
-| `sphere` | string | `private` |
+| `sphere` | string | `personal` |
 | `section` | string | `greeting` |
 | `title` | string | `Саламдашуу жана таанышуу` |
 | `description` | string | описание урока |
@@ -92,10 +92,10 @@ A1, A2, B1, B2, C1
 Сферы:
 
 ```text
-private
+personal
 professional
 social_cultural
-education
+educational
 ```
 
 Встроенные разделы личной сферы:
@@ -106,7 +106,7 @@ farewell
 address
 congratulations
 wishes
-acquaintance
+introduction
 ```
 
 Разделы остальных сфер не зашиты в приложение: они автоматически появляются

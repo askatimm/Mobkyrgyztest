@@ -344,9 +344,9 @@ class _VideoLessonsScreenState extends State<VideoLessonsScreen> {
         return Icons.business_center_outlined;
       case 'social_cultural':
         return Icons.groups_outlined;
-      case 'education':
+      case 'educational':
         return Icons.school_outlined;
-      case 'private':
+      case 'personal':
       default:
         return Icons.person_outline_rounded;
     }
