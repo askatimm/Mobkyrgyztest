@@ -2,6 +2,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'level_detail_screen.dart';
 import 'settings_screen.dart';
+import 'video_lessons_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -12,10 +13,12 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+  final Set<int> _visitedIndexes = {0};
 
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
+      _visitedIndexes.add(index);
     });
   }
 
@@ -23,14 +26,19 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     context.locale;
 
-    final List<Widget> widgetOptions = [
+    final widgetOptions = <Widget>[
       const HomeContent(),
-      const SettingsScreen(),
+      _visitedIndexes.contains(1)
+          ? const VideoLessonsScreen()
+          : const SizedBox.shrink(),
+      _visitedIndexes.contains(2)
+          ? const SettingsScreen()
+          : const SizedBox.shrink(),
     ];
 
     return Scaffold(
       extendBody: true,
-      body: widgetOptions.elementAt(_selectedIndex),
+      body: IndexedStack(index: _selectedIndex, children: widgetOptions),
       bottomNavigationBar: _BubbleBottomBar(
         selectedIndex: _selectedIndex,
         onTap: _onItemTapped,
@@ -50,90 +58,111 @@ class _BubbleBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 110,
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.bottomCenter,
-        children: [
-          Positioned(
-            left: 20,
-            right: 20,
-            bottom: 16,
-            child: Container(
-              height: 70,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(36),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.12),
-                    blurRadius: 18,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _BottomBarItem(
-                      icon: Icons.home_outlined,
-                      label: 'nav_home'.tr(),
-                      selected: selectedIndex == 0,
-                      hideInside: selectedIndex == 0,
-                      onTap: () => onTap(0),
-                    ),
-                  ),
-                  Expanded(
-                    child: _BottomBarItem(
-                      icon: Icons.settings_outlined,
-                      label: 'nav_settings'.tr(),
-                      selected: selectedIndex == 1,
-                      hideInside: selectedIndex == 1,
-                      onTap: () => onTap(1),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+    final selectedIcon = switch (selectedIndex) {
+      0 => Icons.home_rounded,
+      1 => Icons.play_arrow_rounded,
+      _ => Icons.settings_rounded,
+    };
 
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOut,
-            bottom: 38,
-            left: selectedIndex == 0
-                ? MediaQuery.of(context).size.width * 0.25 - 34
-                : MediaQuery.of(context).size.width * 0.75 - 34,
-            child: GestureDetector(
-              onTap: () => onTap(selectedIndex),
-              child: Container(
-                width: 68,
-                height: 68,
-                decoration: BoxDecoration(
-                  color: const Color.fromARGB(255, 71, 174, 234),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.18),
-                      blurRadius: 14,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                  border: Border.all(color: Colors.white, width: 4),
-                ),
-                child: Icon(
-                  selectedIndex == 0
-                      ? Icons.home_outlined
-                      : Icons.settings_outlined,
-                  color: Colors.white,
-                  size: 30,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const horizontalMargin = 16.0;
+        const circleSize = 66.0;
+        final barWidth = constraints.maxWidth - (horizontalMargin * 2);
+        final itemWidth = barWidth / 3;
+        final selectedLeft = horizontalMargin +
+            (itemWidth * (selectedIndex + 0.5)) -
+            (circleSize / 2);
+
+        return SizedBox(
+          height: 112,
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.bottomCenter,
+            children: [
+              Positioned(
+                left: horizontalMargin,
+                right: horizontalMargin,
+                bottom: 12,
+                child: Container(
+                  height: 76,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(38),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.12),
+                        blurRadius: 18,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _BottomBarItem(
+                          icon: Icons.home_outlined,
+                          label: 'nav_home'.tr(),
+                          selected: selectedIndex == 0,
+                          onTap: () => onTap(0),
+                        ),
+                      ),
+                      Expanded(
+                        child: _BottomBarItem(
+                          icon: Icons.play_circle_outline_rounded,
+                          label: 'nav_video'.tr(),
+                          selected: selectedIndex == 1,
+                          onTap: () => onTap(1),
+                        ),
+                      ),
+                      Expanded(
+                        child: _BottomBarItem(
+                          icon: Icons.settings_outlined,
+                          label: 'nav_settings'.tr(),
+                          selected: selectedIndex == 2,
+                          onTap: () => onTap(2),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutCubic,
+                bottom: 42,
+                left: selectedLeft,
+                child: GestureDetector(
+                  onTap: () => onTap(selectedIndex),
+                  child: Container(
+                    width: circleSize,
+                    height: circleSize,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF39AFF3), Color(0xFF2089E4)],
+                      ),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(
+                            0xFF2089E4,
+                          ).withValues(alpha: 0.32),
+                          blurRadius: 14,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                      border: Border.all(color: Colors.white, width: 4),
+                    ),
+                    child: Icon(selectedIcon, color: Colors.white, size: 31),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -142,20 +171,18 @@ class _BottomBarItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool selected;
-  final bool hideInside;
   final VoidCallback onTap;
 
   const _BottomBarItem({
     required this.icon,
     required this.label,
     required this.selected,
-    required this.hideInside,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? const Color(0xFF7A3E7A) : Colors.grey.shade700;
+    final color = selected ? const Color(0xFF1686DF) : Colors.grey.shade700;
 
     return InkWell(
       borderRadius: BorderRadius.circular(36),
@@ -167,15 +194,15 @@ class _BottomBarItem extends StatelessWidget {
           children: [
             Icon(
               icon,
-              color: hideInside ? Colors.transparent : color,
+              color: selected ? Colors.transparent : color,
               size: 26,
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 5),
             Text(
-              hideInside ? '' : label,
+              label,
               style: TextStyle(
                 fontSize: 12,
-                fontWeight: FontWeight.w600,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                 color: color,
               ),
             ),
