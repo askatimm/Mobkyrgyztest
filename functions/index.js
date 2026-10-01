@@ -1,16 +1,244 @@
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { defineJsonSecret } = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+const { S3Client, GetObjectCommand } = require("@aws-sdk/client-s3");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 initializeApp();
 
 const db = getFirestore();
 const MAX_AI_CHECKS_PER_TOPIC = 4;
 const MAX_AI_CHECKS_PER_LEVEL = 20;
+const VIDEO_URL_TTL_SECONDS = 15 * 60;
+const VIDEO_LEVELS = new Set(["A1", "A2", "B1", "B2", "C1"]);
+const VIDEO_SPHERES = new Set([
+  "personal",
+  "professional",
+  "social_cultural",
+  "educational",
+]);
+const VIDEO_ACCESS_CONFIG = defineJsonSecret("VIDEO_ACCESS_CONFIG");
 
 setGlobalOptions({ maxInstances: 10 });
+
+function requireAuthenticatedUser(request) {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "Authentication is required");
+  }
+  return uid;
+}
+
+function videoConfig() {
+  const config = VIDEO_ACCESS_CONFIG.value();
+  const minio = config?.minio;
+  const revenueCat = config?.revenueCat;
+
+  if (
+    !minio?.endPoint ||
+    !minio?.accessKey ||
+    !minio?.secretKey ||
+    !minio?.bucket ||
+    !revenueCat?.apiKey ||
+    !revenueCat?.entitlementId
+  ) {
+    logger.error("VIDEO_ACCESS_CONFIG is incomplete");
+    throw new HttpsError("internal", "Video access is not configured");
+  }
+
+  return { minio, revenueCat };
+}
+
+function createMinioClient(config) {
+  const useSSL = config.useSSL !== false;
+  const port = Number(config.port || (useSSL ? 443 : 80));
+  const defaultPort = useSSL ? 443 : 80;
+  const authority = port === defaultPort
+    ? config.endPoint
+    : `${config.endPoint}:${port}`;
+  return new S3Client({
+    endpoint: `${useSSL ? "https" : "http"}://${authority}`,
+    region: config.region || "us-east-1",
+    forcePathStyle: true,
+    credentials: {
+      accessKeyId: config.accessKey,
+      secretAccessKey: config.secretKey,
+    },
+  });
+}
+
+function requireObjectKey(value, fieldName) {
+  const key = typeof value === "string" ? value.trim() : "";
+  if (
+    !key ||
+    key.startsWith("/") ||
+    key.includes("..") ||
+    key.includes("\\")
+  ) {
+    logger.error("Invalid video object key", { fieldName });
+    throw new HttpsError("failed-precondition", "Invalid video metadata");
+  }
+  return key;
+}
+
+async function hasAdminPremiumOverride(uid) {
+  const snapshot = await db.collection("premium_access").doc(uid).get();
+  if (!snapshot.exists || snapshot.data()?.isActive !== true) return false;
+
+  const expiresAt = snapshot.data()?.expiresAt;
+  return !expiresAt || expiresAt.toMillis() > Date.now();
+}
+
+async function hasRevenueCatEntitlement(uid, config) {
+  const response = await fetch(
+    `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(uid)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        Accept: "application/json",
+      },
+    }
+  );
+
+  if (!response.ok) {
+    logger.error("RevenueCat premium lookup failed", {
+      uid,
+      status: response.status,
+    });
+    throw new HttpsError("unavailable", "Premium status is unavailable");
+  }
+
+  const customer = await response.json();
+  const entitlement =
+    customer?.subscriber?.entitlements?.[config.entitlementId];
+  if (!entitlement) return false;
+
+  const expiresDate = entitlement.expires_date;
+  return expiresDate == null || Date.parse(expiresDate) > Date.now();
+}
+
+async function requirePremium(uid, config) {
+  if (await hasAdminPremiumOverride(uid)) return;
+
+  if (!(await hasRevenueCatEntitlement(uid, config))) {
+    throw new HttpsError("permission-denied", "PREMIUM_REQUIRED");
+  }
+}
+
+async function presignObject(client, bucket, objectKey) {
+  return getSignedUrl(
+    client,
+    new GetObjectCommand({ Bucket: bucket, Key: objectKey }),
+    { expiresIn: VIDEO_URL_TTL_SECONDS }
+  );
+}
+
+exports.getVideoLessons = onCall(
+  {
+    region: "us-central1",
+    invoker: "public",
+    secrets: [VIDEO_ACCESS_CONFIG],
+  },
+  async (request) => {
+    const uid = requireAuthenticatedUser(request);
+    const level = request.data?.level?.toString().trim().toUpperCase() || "";
+    const sphere =
+      request.data?.sphere?.toString().trim().toLowerCase() || "";
+
+    if (!VIDEO_LEVELS.has(level) || !VIDEO_SPHERES.has(sphere)) {
+      throw new HttpsError("invalid-argument", "Invalid video filters");
+    }
+
+    const config = videoConfig();
+    await requirePremium(uid, config.revenueCat);
+
+    const snapshot = await db
+      .collection("videos")
+      .where("level", "==", level)
+      .where("sphere", "==", sphere)
+      .where("isActive", "==", true)
+      .get();
+    const minio = createMinioClient(config.minio);
+
+    const lessons = await Promise.all(
+      snapshot.docs.map(async (document) => {
+        const data = document.data();
+        const thumbnailObjectKey = requireObjectKey(
+          data.thumbnailObjectKey,
+          "thumbnailObjectKey"
+        );
+
+        return {
+          id: document.id,
+          level: data.level,
+          sphere: data.sphere,
+          section: data.section,
+          title: data.title || "",
+          titleKy: data.titleKy || null,
+          titleRu: data.titleRu || null,
+          description: data.description || "",
+          descriptionKy: data.descriptionKy || null,
+          descriptionRu: data.descriptionRu || null,
+          sectionTitle: data.sectionTitle || null,
+          sectionTitleKy: data.sectionTitleKy || null,
+          sectionTitleRu: data.sectionTitleRu || null,
+          duration: Number(data.duration || 0),
+          order: Number(data.order || 0),
+          isActive: true,
+          thumbnailUrl: await presignObject(
+            minio,
+            config.minio.bucket,
+            thumbnailObjectKey
+          ),
+        };
+      })
+    );
+
+    lessons.sort((first, second) => {
+      const orderDifference = first.order - second.order;
+      if (orderDifference !== 0) return orderDifference;
+      return first.title.localeCompare(second.title);
+    });
+
+    return { lessons, expiresIn: VIDEO_URL_TTL_SECONDS };
+  }
+);
+
+exports.getVideoPlaybackUrl = onCall(
+  {
+    region: "us-central1",
+    invoker: "public",
+    secrets: [VIDEO_ACCESS_CONFIG],
+  },
+  async (request) => {
+    const uid = requireAuthenticatedUser(request);
+    const videoId = request.data?.videoId?.toString().trim() || "";
+
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(videoId)) {
+      throw new HttpsError("invalid-argument", "Invalid video ID");
+    }
+
+    const config = videoConfig();
+    await requirePremium(uid, config.revenueCat);
+
+    const snapshot = await db.collection("videos").doc(videoId).get();
+    if (!snapshot.exists || snapshot.data()?.isActive !== true) {
+      throw new HttpsError("not-found", "Video lesson was not found");
+    }
+
+    const objectKey = requireObjectKey(
+      snapshot.data().videoObjectKey,
+      "videoObjectKey"
+    );
+    const minio = createMinioClient(config.minio);
+    const url = await presignObject(minio, config.minio.bucket, objectKey);
+
+    return { url, expiresIn: VIDEO_URL_TTL_SECONDS };
+  }
+);
 
 async function callGemini(models, body, apiKey) {
   let lastError = null;
@@ -593,4 +821,3 @@ Essay:
     }
   }
 );
-

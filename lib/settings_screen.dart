@@ -5,6 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/auth_service.dart';
 import 'screens/login_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'preview/design_preview.dart';
+import 'widgets/video_design.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -16,6 +18,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _isSoundEnabled = true;
   String _avatarPath = 'assets/images/avatar_1.jpeg';
+  String _previewName = '';
 
   @override
   void initState() {
@@ -24,6 +27,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _loadSettings() async {
+    if (DesignPreview.enabled) return;
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
 
@@ -35,15 +39,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _saveSoundSetting(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('test_sound', value);
+    if (!DesignPreview.enabled) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('test_sound', value);
+    }
+    if (!mounted) return;
     setState(() => _isSoundEnabled = value);
   }
 
   void _editName() {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = DesignPreview.enabled ? null : FirebaseAuth.instance.currentUser;
 
-    final controller = TextEditingController(text: user?.displayName ?? '');
+    final controller = TextEditingController(
+      text: DesignPreview.enabled ? _previewName : user?.displayName ?? '',
+    );
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -59,10 +68,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           TextButton(
             onPressed: () async {
-              final user = FirebaseAuth.instance.currentUser;
-
-              await user?.updateDisplayName(controller.text.trim());
-              await user?.reload();
+              if (DesignPreview.enabled) {
+                _previewName = controller.text.trim();
+              } else {
+                final user = FirebaseAuth.instance.currentUser;
+                await user?.updateDisplayName(controller.text.trim());
+                await user?.reload();
+              }
 
               if (!mounted) return;
 
@@ -73,7 +85,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
-    );
+    ).whenComplete(controller.dispose);
   }
 
   void _changeAvatar() {
@@ -91,8 +103,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: avatars.map((path) {
             return GestureDetector(
               onTap: () async {
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.setString('avatar_path', path);
+                if (!DesignPreview.enabled) {
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setString('avatar_path', path);
+                }
                 if (!mounted) return;
                 setState(() => _avatarPath = path);
                 Navigator.pop(context);
@@ -109,6 +123,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _sendFeedback() async {
+    if (DesignPreview.enabled) {
+      _showPreviewNotice();
+      return;
+    }
     final uri = Uri(
       scheme: 'mailto',
       path: 'info@kyrgyztest.gov.kg',
@@ -117,10 +135,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await launchUrl(uri);
   }
 
-  final AuthService _authService = AuthService();
+  AuthService? _authService;
+
+  void _showPreviewNotice() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('design_preview_action'.tr())),
+    );
+  }
 
   Future<void> _logout() async {
-    await _authService.signOut();
+    if (DesignPreview.enabled) {
+      _showPreviewNotice();
+      return;
+    }
+    await (_authService ??= AuthService()).signOut();
 
     if (!mounted) return;
 
@@ -135,13 +163,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       padding: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
-        color: const Color.fromARGB(
-          255,
-          215,
-          218,
-          243,
-        ).withValues(alpha: 0.95), // Сделали контейнеры чуть прозрачными
+        color: Colors.white.withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: LearningColors.border),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -156,9 +180,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = DesignPreview.enabled ? null : FirebaseAuth.instance.currentUser;
 
-    final userName = user?.displayName?.trim().isNotEmpty == true
+    final userName = DesignPreview.enabled
+        ? (_previewName.isEmpty ? 'design_preview_profile'.tr() : _previewName)
+        : user?.displayName?.trim().isNotEmpty == true
         ? user!.displayName!
         : 'User';
     return Scaffold(
@@ -191,6 +217,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               children: [
                 const SizedBox(height: 24),
+                if (DesignPreview.enabled)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    child: DesignPreviewNotice(),
+                  ),
 
                 /// ===== PROFILE =====
                 GestureDetector(
@@ -319,6 +350,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onTap: _logout,
                   ),
                 ]),
+                const SizedBox(height: 125),
               ],
             ),
           ),

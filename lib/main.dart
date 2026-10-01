@@ -7,6 +7,9 @@ import 'package:connectivity_plus/connectivity_plus.dart'; // Не забудь�
 import 'splash_screen.dart';
 import 'firebase_options.dart';
 import 'services/premium_service.dart';
+import 'home_screen.dart';
+import 'preview/design_preview.dart';
+import 'widgets/video_design.dart';
 
 // 1. Глобальный ключ для доступа к SnackBar из любой точки приложения
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
@@ -14,7 +17,7 @@ final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await PremiumService.init();
+  if (!DesignPreview.enabled) await PremiumService.init();
 
   // Блокируем ориентацию
   await SystemChrome.setPreferredOrientations([
@@ -23,13 +26,17 @@ void main() async {
   ]);
 
   await EasyLocalization.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  if (!DesignPreview.enabled) {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  }
 
   runApp(
     EasyLocalization(
       supportedLocales: const [Locale('ky'), Locale('ru')],
       path: 'assets/translations',
       fallbackLocale: const Locale('ru'),
+      startLocale: DesignPreview.enabled ? const Locale('ky') : null,
+      saveLocale: !DesignPreview.enabled,
       child: const MyApp(),
     ),
   );
@@ -49,6 +56,7 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     // 2. Запускаем глобальный слушатель интернета
+    if (DesignPreview.enabled) return;
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen((
       List<ConnectivityResult> results,
     ) {
@@ -91,10 +99,13 @@ class _MyAppState extends State<MyApp> {
       debugShowCheckedModeBanner: false,
       title: 'KyrgyzTest',
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        colorScheme: ColorScheme.fromSeed(seedColor: LearningColors.blue),
+        scaffoldBackgroundColor: LearningColors.background,
         useMaterial3: true, // Рекомендуется для современного дизайна
       ),
-      home: const SplashScreen(),
+      home: DesignPreview.enabled
+          ? const HomeScreen(initialIndex: DesignPreview.initialTab)
+          : const SplashScreen(),
     );
   }
 }

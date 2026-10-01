@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'quiz_instructions_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // Проверь путь к файлу
+import 'preview/design_preview.dart';
 
 class VolumeBackButton extends StatefulWidget {
   final String text;
@@ -113,6 +114,7 @@ class LevelDetailScreen extends StatelessWidget {
   }
 
   Future<bool> _hasTasks(String subTestId) async {
+    if (DesignPreview.enabled) return true;
     final snapshot = await FirebaseFirestore.instance
         .collection('levels')
         .doc(levelId)
