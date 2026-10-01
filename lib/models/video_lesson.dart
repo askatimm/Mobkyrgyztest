@@ -5,7 +5,6 @@ class VideoLesson {
   final String section;
   final String title;
   final String description;
-  final String videoUrl;
   final String thumbnailUrl;
   final int duration;
   final int order;
@@ -25,7 +24,6 @@ class VideoLesson {
     required this.section,
     required this.title,
     required this.description,
-    required this.videoUrl,
     required this.thumbnailUrl,
     required this.duration,
     required this.order,
@@ -47,7 +45,6 @@ class VideoLesson {
       section: _readString(data['section']).toLowerCase(),
       title: _readString(data['title']),
       description: _readString(data['description']),
-      videoUrl: _readString(data['videoUrl']),
       thumbnailUrl: _readString(data['thumbnailUrl']),
       duration: _readInt(data['duration']),
       order: _readInt(data['order']),
@@ -94,7 +91,7 @@ class VideoLesson {
         sphere.isNotEmpty &&
         section.isNotEmpty &&
         title.isNotEmpty &&
-        _isSecureMediaUrl(videoUrl) &&
+        id.isNotEmpty &&
         _isSecureMediaUrl(thumbnailUrl);
   }
 

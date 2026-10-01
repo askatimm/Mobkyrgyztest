@@ -13,10 +13,8 @@ void main() {
         'titleRu': 'Приветствие',
         'description': 'Кыргызча сүрөттөмө',
         'descriptionRu': 'Описание на русском',
-        'videoUrl':
-            'https://media.kyrgyztest.kg/videos/A1/personal/greeting/001.mp4',
         'thumbnailUrl':
-            'https://media.kyrgyztest.kg/videos/A1/personal/greeting/001.jpg',
+            'https://media.kyrgyztest.kg/videos/A1/personal/greeting/001.jpg?X-Amz-Signature=test',
         'duration': 180,
         'order': 1,
         'isActive': true,
@@ -30,15 +28,14 @@ void main() {
       expect(lesson.hasRequiredMedia, isTrue);
     });
 
-    test('rejects media outside the configured MinIO host', () {
+    test('rejects thumbnails outside the configured MinIO host', () {
       final lesson = VideoLesson.fromMap({
         'level': 'A1',
         'sphere': 'personal',
         'section': 'greeting',
         'title': 'Саламдашуу',
         'description': '',
-        'videoUrl': 'https://example.com/001.mp4',
-        'thumbnailUrl': 'https://media.kyrgyztest.kg/001.jpg',
+        'thumbnailUrl': 'https://example.com/001.jpg',
         'duration': 180,
         'order': 1,
         'isActive': true,

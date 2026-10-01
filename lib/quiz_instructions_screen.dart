@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'quiz_screen.dart';
+import 'preview/design_preview.dart';
 
 /// ОБЪЁМНАЯ КНОПКА
 
@@ -182,6 +183,12 @@ class QuizInstructionsScreen extends StatelessWidget {
                       child: VolumeButton(
                         text: "start_button".tr(),
                         onPressed: () {
+                          if (DesignPreview.enabled) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('design_preview_action'.tr())),
+                            );
+                            return;
+                          }
                           Navigator.of(context).pushReplacement(
                             MaterialPageRoute(
                               builder: (context) => QuizScreen(

@@ -1,85 +1,115 @@
 # Настройка раздела «Видео сабактар»
 
-Приложение читает активные уроки из коллекции Firestore `videos`, а сами
-видеофайлы и превью загружает по HTTPS с `media.kyrgyztest.kg`.
+## Сначала можно посмотреть дизайн — без настройки Premium
+
+Из корня Flutter-проекта запустите:
+
+```bash
+flutter pub get
+flutter run --dart-define=DESIGN_PREVIEW=true
+```
+
+Для просмотра на ноутбуке в Chrome:
+
+```bash
+flutter run -d chrome --dart-define=DESIGN_PREVIEW=true
+```
+
+Предпросмотр открывает «Видео» и позволяет переключать все три вкладки,
+уровни A1–C1, четыре сферы, связанные разделы и страницы уроков. С главной
+доступны меню субтестов и инструкции. Реальные тесты не запускаются.
+В настройках можно проверить язык, аватар и имя демо-профиля.
+
+Содержимое уроков и изображения — демонстрационные. Воспроизведение реальных
+видео, Firebase, RevenueCat, оплата и изменения аккаунта отключены. Баннер
+«ДЕМО» всегда виден. Обычная сборка не меняет доступ к приватным файлам.
+Флаг действует только в debug: в profile/release он всегда игнорируется.
+
+Для отдельного проверочного APK (нужен Android SDK):
+
+```bash
+flutter build apk --debug --dart-define=DESIGN_PREVIEW=true
+```
+
+Полученный `build/app/outputs/flutter-apk/app-debug.apk` — только для локальной
+проверки. Не публикуйте его в магазине и не устанавливайте поверх рабочего
+приложения без резервной копии. Для обычного запуска уберите флаг.
+
+Проверки интерфейса:
+
+```bash
+flutter analyze
+flutter test
+flutter test --dart-define=DESIGN_PREVIEW=true
+```
+
+Предпросмотр не требует развёртывания Cloud Functions. После утверждения
+дизайна переходите к настройке ниже.
+
+## Защищённый доступ в рабочем приложении
+
+Бакет MinIO `videos` остаётся приватным. Firestore хранит только метаданные и
+ключи объектов. Firebase Cloud Functions проверяют Firebase Authentication и
+Premium в RevenueCat, после чего выдают временные подписанные ссылки.
+
+Секретный ключ MinIO нельзя помещать во Flutter, Firestore, Git или `.env`.
 
 ## 1. Структура MinIO
 
-В бакете `videos` используйте следующую структуру объектов:
-
 ```text
-{level}/{sphere}/{section}/{number}.mp4
-{level}/{sphere}/{section}/{number}.jpg
+videos/
+  A1/
+    personal/
+      greeting/
+        001.mp4
+        001.jpg
 ```
 
-Пример:
+`videos` — название бакета. В Firestore указываются ключи без названия бакета:
 
 ```text
 A1/personal/greeting/001.mp4
 A1/personal/greeting/001.jpg
 ```
 
-Итоговые публичные адреса:
+Ключ MinIO, используемый Firebase, должен иметь только следующие разрешения:
+
+- `s3:GetBucketLocation` для `arn:aws:s3:::videos`;
+- `s3:GetObject` для `arn:aws:s3:::videos/*`.
+
+Обычное открытие адреса объекта должно возвращать `403 AccessDenied`.
+
+## 2. Документ Firestore
+
+Для каждого урока создайте документ в коллекции `videos`:
 
 ```text
-https://media.kyrgyztest.kg/videos/A1/personal/greeting/001.mp4
-https://media.kyrgyztest.kg/videos/A1/personal/greeting/001.jpg
+level: "A1"
+sphere: "personal"
+section: "greeting"
+title: "Саламдашуу"
+titleRu: "Приветствие"
+description: "..."
+descriptionRu: "..."
+videoObjectKey: "A1/personal/greeting/001.mp4"
+thumbnailObjectKey: "A1/personal/greeting/001.jpg"
+duration: 180
+order: 1
+isActive: true
 ```
 
-Для мобильного приложения нужны постоянные HTTPS-ссылки. Истекающие MinIO
-presigned URL нельзя сохранять в Firestore как постоянные адреса. Если бакет
-закрытый, выдачу временных ссылок следует делать через отдельный защищённый
-backend.
+Поля `videoUrl` и `thumbnailUrl` приложением не используются. Истекающие
+подписанные ссылки нельзя сохранять в Firestore.
 
-## 2. Метаданные Firestore
+Дополнительно поддерживаются:
 
-Для каждого урока создайте отдельный документ в коллекции `videos`:
-
-```json
-{
-  "level": "A1",
-  "sphere": "personal",
-  "section": "greeting",
-  "title": "Саламдашуу жана таанышуу",
-  "description": "Саламдашуу, таанышуу жана жөнөкөй суроолор",
-  "videoUrl": "https://media.kyrgyztest.kg/videos/A1/personal/greeting/001.mp4",
-  "thumbnailUrl": "https://media.kyrgyztest.kg/videos/A1/personal/greeting/001.jpg",
-  "duration": 192,
-  "order": 1,
-  "isActive": true
-}
+```text
+titleKy
+descriptionKy
+sectionTitle
+sectionTitleKy
+sectionTitleRu
 ```
-
-Обязательные поля:
-
-| Поле | Тип | Пример |
-|---|---|---|
-| `level` | string | `A1` |
-| `sphere` | string | `personal` |
-| `section` | string | `greeting` |
-| `title` | string | `Саламдашуу жана таанышуу` |
-| `description` | string | описание урока |
-| `videoUrl` | string | постоянный HTTPS URL видео |
-| `thumbnailUrl` | string | постоянный HTTPS URL изображения |
-| `duration` | number | длительность в секундах |
-| `order` | number | порядок внутри раздела |
-| `isActive` | boolean | показывать ли урок |
-
-Дополнительно поддерживаются локализованные поля:
-
-```json
-{
-  "titleKy": "Саламдашуу жана таанышуу",
-  "titleRu": "Приветствие и знакомство",
-  "descriptionKy": "Саламдашуу, таанышуу жана жөнөкөй суроолор",
-  "descriptionRu": "Приветствие, знакомство и простые вопросы",
-  "sectionTitleKy": "Саламдашуу",
-  "sectionTitleRu": "Приветствие"
-}
-```
-
-Если локализованные поля отсутствуют, приложение использует `title`,
-`description` и встроенное название известного раздела.
 
 ## 3. Допустимые коды
 
@@ -98,7 +128,7 @@ social_cultural
 educational
 ```
 
-Встроенные разделы личной сферы:
+Разделы личной сферы:
 
 ```text
 greeting
@@ -109,19 +139,68 @@ wishes
 introduction
 ```
 
-Разделы остальных сфер не зашиты в приложение: они автоматически появляются
-во втором ComboBox, когда в Firestore добавлен хотя бы один активный урок с
-соответствующим `section`. Для корректных кыргызских и русских названий укажите
-`sectionTitleKy` и `sectionTitleRu`.
+Разделы остальных сфер появляются во втором ComboBox из активных документов
+Firestore. Для корректных названий укажите `sectionTitleKy` и
+`sectionTitleRu`.
 
-## 4. Доступ и CORS
+## 4. Секрет Firebase
 
-- Разрешите приложению читать активные документы коллекции `videos`.
-- Запись в `videos` должна быть доступна только администраторам.
-- На `media.kyrgyztest.kg` включите `GET`, `HEAD` и byte-range запросы. Они
-  нужны для перемотки и потокового воспроизведения MP4.
-- Для Flutter Web добавьте CORS origin вашего веб-приложения. Android и iOS
-  CORS не используют.
+Из корня проекта выполните:
 
-После добавления документа с `isActive: true` урок появится в приложении без
-выпуска новой версии.
+```bash
+firebase functions:secrets:set VIDEO_ACCESS_CONFIG
+```
+
+Введите одну JSON-строку с реальными значениями вместо примеров:
+
+```json
+{
+  "minio": {
+    "endPoint": "media.kyrgyztest.kg",
+    "port": 443,
+    "useSSL": true,
+    "region": "us-east-1",
+    "bucket": "videos",
+    "accessKey": "MINIO_READ_ONLY_ACCESS_KEY",
+    "secretKey": "MINIO_READ_ONLY_SECRET_KEY"
+  },
+  "revenueCat": {
+    "apiKey": "REVENUECAT_V1_SECRET_API_KEY",
+    "entitlementId": "KyrgyzTest Pro"
+  }
+}
+```
+
+RevenueCat API key должен быть секретным серверным ключом V1, а не публичным
+SDK-ключом из мобильного приложения. `entitlementId` должен в точности
+совпадать с идентификатором entitlement в RevenueCat.
+
+После сохранения секрета разверните функции:
+
+```bash
+firebase deploy --only functions:getVideoLessons,functions:getVideoPlaybackUrl
+```
+
+## 5. Проверка Premium
+
+Firebase UID используется как RevenueCat App User ID. Приложение уже вызывает
+`Purchases.logIn(user.uid)`, поэтому эту синхронизацию необходимо сохранить.
+
+Для временного тестового доступа администратор может создать документ:
+
+```text
+premium_access/{firebaseUid}
+  isActive: true
+  expiresAt: необязательный Firestore Timestamp
+```
+
+Клиентам нельзя разрешать запись в коллекцию `premium_access`.
+
+## 6. Ожидаемое поведение
+
+- Прямая ссылка MinIO возвращает `403 AccessDenied`.
+- `getVideoLessons` возвращает активные уроки и подписанные ссылки превью.
+- `getVideoPlaybackUrl` выдаёт ссылку на видео только Premium-пользователю.
+- Ссылка автоматически перестаёт работать через 15 минут.
+- MinIO поддерживает `GET`, `HEAD` и byte-range запросы для воспроизведения и
+  перемотки MP4.

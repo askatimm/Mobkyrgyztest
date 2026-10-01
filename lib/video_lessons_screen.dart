@@ -3,574 +3,325 @@ import 'package:flutter/material.dart';
 
 import 'models/video_lesson.dart';
 import 'models/video_taxonomy.dart';
+import 'preview/design_preview.dart';
+import 'preview/video_preview_catalog.dart';
+import 'services/premium_service.dart';
 import 'services/video_lessons_service.dart';
 import 'video_player_screen.dart';
+import 'widgets/video_design.dart';
 
 class VideoLessonsScreen extends StatefulWidget {
   const VideoLessonsScreen({super.key});
-
   @override
   State<VideoLessonsScreen> createState() => _VideoLessonsScreenState();
 }
 
 class _VideoLessonsScreenState extends State<VideoLessonsScreen> {
-  final VideoLessonsService _service = VideoLessonsService();
-
-  String _selectedLevel = VideoTaxonomy.levels.first;
-  String _selectedSphere = VideoTaxonomy.spheres.first.code;
-  String? _selectedSection;
-  late Stream<List<VideoLesson>> _lessonsStream;
+  VideoLessonsService? _service;
+  String _level = VideoTaxonomy.levels.first;
+  String _sphere = VideoTaxonomy.spheres.first.code;
+  String? _section;
+  late Future<List<VideoLesson>> _lessonsFuture;
 
   @override
   void initState() {
     super.initState();
-    _replaceLessonsStream();
+    _loadLessons();
   }
 
-  void _replaceLessonsStream() {
-    _lessonsStream = _service.watchActiveLessons(
-      level: _selectedLevel,
-      sphere: _selectedSphere,
-    );
+  void _loadLessons() {
+    _lessonsFuture = DesignPreview.enabled
+        ? Future.value(VideoPreviewCatalog.lessons(level: _level, sphere: _sphere))
+        : (_service ??= VideoLessonsService())
+            .fetchActiveLessons(level: _level, sphere: _sphere);
   }
 
-  void _selectLevel(String level) {
-    if (level == _selectedLevel) return;
+  void _changeFilter({String? level, String? sphere}) {
     setState(() {
-      _selectedLevel = level;
-      _selectedSection = null;
-      _replaceLessonsStream();
+      _level = level ?? _level;
+      _sphere = sphere ?? _sphere;
+      _section = null;
+      _loadLessons();
     });
   }
 
-  void _selectSphere(String sphere) {
-    if (sphere == _selectedSphere) return;
-    setState(() {
-      _selectedSphere = sphere;
-      _selectedSection = null;
-      _replaceLessonsStream();
-    });
+  Future<void> _refresh() async {
+    setState(_loadLessons);
+    try {
+      await _lessonsFuture;
+    } catch (_) {
+      // FutureBuilder owns the visible error/retry state.
+    }
   }
 
-  void _retry() {
-    setState(_replaceLessonsStream);
+  Future<void> _showPaywall() async {
+    await PremiumService.showPaywall();
+    if (mounted) await _refresh();
+  }
+
+  void _openLesson(VideoLesson lesson, List<VideoLesson> playlist) {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => VideoPlayerScreen(lesson: lesson, playlist: playlist),
+    ));
+  }
+
+  List<VideoSectionOption> _sections(List<VideoLesson> lessons) {
+    final result = <String, VideoSectionOption>{
+      for (final item in VideoTaxonomy.knownSections[_sphere] ??
+          const <VideoSectionOption>[]) item.code: item,
+    };
+    for (final lesson in lessons) {
+      result.putIfAbsent(lesson.section, () => VideoSectionOption(
+        code: lesson.section,
+        ky: VideoTaxonomy.sectionLabel(sphere: _sphere, section: lesson.section,
+            languageCode: 'ky', metadataLabel: lesson.localizedSectionTitle('ky')),
+        ru: VideoTaxonomy.sectionLabel(sphere: _sphere, section: lesson.section,
+            languageCode: 'ru', metadataLabel: lesson.localizedSectionTitle('ru')),
+      ));
+    }
+    return result.values.toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final languageCode = context.locale.languageCode;
-
+    final language = context.locale.languageCode;
     return Scaffold(
-      backgroundColor: const Color(0xFFF2FAFF),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFE2F8FF), Color(0xFFF7FBFF)],
-          ),
-        ),
-        child: SafeArea(
-          bottom: false,
-          child: StreamBuilder<List<VideoLesson>>(
-            stream: _lessonsStream,
+      backgroundColor: LearningColors.background,
+      body: SafeArea(bottom: false, child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: FutureBuilder<List<VideoLesson>>(
+            future: _lessonsFuture,
             builder: (context, snapshot) {
+              final loading = snapshot.connectionState == ConnectionState.waiting;
               final lessons = (snapshot.data ?? const <VideoLesson>[])
-                  .where(
-                    (lesson) =>
-                        lesson.level == _selectedLevel &&
-                        lesson.sphere == _selectedSphere,
-                  )
-                  .toList();
-              final sections = _buildSectionChoices(
-                lessons,
-                languageCode,
-              );
-              final effectiveSection = _effectiveSection(sections);
-              final visibleLessons = effectiveSection == null
-                  ? const <VideoLesson>[]
-                  : lessons
-                        .where((lesson) => lesson.section == effectiveSection)
-                        .toList();
-
-              return CustomScrollView(
-                physics: const BouncingScrollPhysics(),
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: _buildHeader(
-                      context,
-                      sections: sections,
-                      effectiveSection: effectiveSection,
-                    ),
-                  ),
-                  if (snapshot.connectionState == ConnectionState.waiting)
-                    const SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  else if (snapshot.hasError)
-                    SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: _MessagePanel(
-                        icon: Icons.cloud_off_rounded,
-                        title: 'video_loading_error'.tr(),
-                        actionLabel: 'retry'.tr(),
-                        onAction: _retry,
-                      ),
-                    )
-                  else if (sections.isEmpty)
-                    SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: _MessagePanel(
-                        icon: Icons.video_library_outlined,
-                        title: 'video_no_sections'.tr(),
-                      ),
-                    )
-                  else if (visibleLessons.isEmpty)
-                    SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: _MessagePanel(
-                        icon: Icons.ondemand_video_outlined,
-                        title: 'video_no_lessons'.tr(),
-                      ),
-                    )
-                  else
+                  .where((item) => item.level == _level && item.sphere == _sphere)
+                  .toList()
+                ..sort((a, b) {
+                  final order = a.order.compareTo(b.order);
+                  return order != 0 ? order : a.id.compareTo(b.id);
+                });
+              final sections = _sections(lessons);
+              final selected = sections.any((item) => item.code == _section)
+                  ? _section : sections.firstOrNull?.code;
+              final visible = lessons.where((item) => item.section == selected).toList();
+              final title = selected == null ? 'video_section'.tr()
+                  : sections.firstWhere((item) => item.code == selected).label(language);
+              final minutes = (visible.fold<int>(0, (sum, item) => sum + item.duration) / 60).ceil();
+              return RefreshIndicator(
+                onRefresh: _refresh, color: LearningColors.blue,
+                child: CustomScrollView(
+                  key: const PageStorageKey('video-library'),
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  slivers: [
                     SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
-                      sliver: SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) {
-                            if (index.isOdd) {
-                              return const SizedBox(height: 12);
-                            }
-                            final lessonIndex = index ~/ 2;
-                            return _VideoLessonCard(
-                              lesson: visibleLessons[lessonIndex],
-                              languageCode: languageCode,
-                              onTap: () =>
-                                  _openLesson(visibleLessons[lessonIndex]),
-                            );
-                          },
-                          childCount: (visibleLessons.length * 2) - 1,
-                        ),
-                      ),
+                      padding: const EdgeInsets.fromLTRB(20, 22, 20, 0),
+                      sliver: SliverToBoxAdapter(child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            const Icon(Icons.auto_stories_rounded, size: 20, color: LearningColors.blue),
+                            const SizedBox(width: 8),
+                            const Expanded(child: Text('Кыргызтест', maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontWeight: FontWeight.w700,
+                                    color: LearningColors.ink, fontSize: 15))),
+                            const SizedBox(width: 8), const PremiumBadge(),
+                          ]),
+                          const SizedBox(height: 22),
+                          Text('video_lessons_title'.tr(), style: const TextStyle(
+                              fontSize: 30, height: 1.15, letterSpacing: -0.8,
+                              fontWeight: FontWeight.w800, color: LearningColors.ink)),
+                          const SizedBox(height: 8),
+                          Text('video_lessons_subtitle'.tr(), style: const TextStyle(
+                              fontSize: 14, height: 1.5, color: LearningColors.muted)),
+                          if (DesignPreview.enabled) ...[
+                            const SizedBox(height: 16), const DesignPreviewNotice(),
+                          ],
+                          const SizedBox(height: 22),
+                          _buildFilters(sections, selected, language),
+                          const SizedBox(height: 24),
+                          Text(title, style: const TextStyle(fontSize: 22, height: 1.2,
+                              fontWeight: FontWeight.w700, color: LearningColors.ink)),
+                          const SizedBox(height: 6),
+                          if (!loading && visible.isNotEmpty)
+                            Text('${'video_lesson_count'.tr(namedArgs: {'count': '${visible.length}'})}'
+                                ' · ${'video_total_minutes'.tr(namedArgs: {'minutes': '$minutes'})}',
+                                style: const TextStyle(color: LearningColors.muted, fontSize: 13)),
+                          const SizedBox(height: 16),
+                        ],
+                      )),
                     ),
-                  const SliverToBoxAdapter(child: SizedBox(height: 135)),
-                ],
+                    if (loading)
+                      const SliverPadding(padding: EdgeInsets.symmetric(horizontal: 20),
+                          sliver: SliverToBoxAdapter(child: _LoadingLessons()))
+                    else if (snapshot.error is VideoPremiumRequiredException)
+                      SliverToBoxAdapter(child: _LibraryMessage(
+                        icon: Icons.workspace_premium_rounded, title: 'video_premium_title'.tr(),
+                        description: 'video_premium_required'.tr(), action: 'video_open_paywall'.tr(),
+                        onAction: _showPaywall, premium: true,
+                      ))
+                    else if (snapshot.hasError)
+                      SliverToBoxAdapter(child: _LibraryMessage(
+                        icon: Icons.wifi_off_rounded, title: 'video_loading_error'.tr(),
+                        description: 'video_loading_error_detail'.tr(), action: 'retry'.tr(), onAction: _refresh,
+                      ))
+                    else if (visible.isEmpty)
+                      SliverToBoxAdapter(child: _LibraryMessage(
+                        icon: Icons.video_library_outlined, title: 'video_no_lessons'.tr(),
+                        description: 'video_empty_detail'.tr(),
+                      ))
+                    else
+                      SliverPadding(padding: const EdgeInsets.symmetric(horizontal: 20),
+                        sliver: SliverList(delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            final lesson = visible[index];
+                            return Padding(padding: const EdgeInsets.only(bottom: 14),
+                              child: index == 0
+                                  ? _FeaturedLesson(lesson: lesson, language: language,
+                                      onTap: () => _openLesson(lesson, visible))
+                                  : _CompactLesson(lesson: lesson, language: language,
+                                      onTap: () => _openLesson(lesson, visible)),
+                            );
+                          }, childCount: visible.length,
+                        )),
+                      ),
+                    const SliverToBoxAdapter(child: SizedBox(height: 125)),
+                  ],
+                ),
               );
             },
           ),
         ),
-      ),
+      )),
     );
   }
 
-  Widget _buildHeader(
-    BuildContext context, {
-    required List<_SectionChoice> sections,
-    required String? effectiveSection,
-  }) {
-    final languageCode = context.locale.languageCode;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'video_lessons_title'.tr(),
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Color(0xFF0C1733),
-              fontSize: 32,
-              height: 1.1,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -0.6,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'video_lessons_subtitle'.tr(),
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Color(0xFF71809E),
-              fontSize: 15,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 18),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.88),
-              borderRadius: BorderRadius.circular(22),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF5FA7D7).withValues(alpha: 0.1),
-                  blurRadius: 22,
-                  offset: const Offset(0, 8),
+  Widget _buildFilters(List<VideoSectionOption> sections, String? selected, String language) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: LearningColors.border)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('level'.tr(), style: const TextStyle(fontSize: 12,
+            fontWeight: FontWeight.w600, color: LearningColors.muted)),
+        const SizedBox(height: 10),
+        Row(children: [for (final level in VideoTaxonomy.levels) ...[
+          if (level != VideoTaxonomy.levels.first) const SizedBox(width: 6),
+          Expanded(child: Semantics(
+            selected: level == _level, button: true,
+            label: 'levels.${level.toLowerCase()}'.tr(),
+            child: Material(
+              color: level == _level ? LearningColors.navy : LearningColors.background,
+              borderRadius: BorderRadius.circular(12),
+              child: InkWell(key: ValueKey('video-level-$level'),
+                borderRadius: BorderRadius.circular(12),
+                onTap: () { if (level != _level) _changeFilter(level: level); },
+                child: Padding(padding: const EdgeInsets.symmetric(vertical: 13),
+                  child: Text(level, textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
+                        color: level == _level ? Colors.white : LearningColors.muted)),
                 ),
-              ],
+              ),
             ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: _LabeledDropdown(
-                    label: 'video_sphere'.tr(),
-                    value: _selectedSphere,
-                    icon: _sphereIcon(_selectedSphere),
-                    items: VideoTaxonomy.spheres
-                        .map(
-                          (sphere) => _DropdownChoice(
-                            value: sphere.code,
-                            primary: sphere.label(languageCode),
-                            secondary: sphere.secondaryLabel(languageCode),
-                            icon: _sphereIcon(sphere.code),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: _selectSphere,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _LabeledDropdown(
-                    label: 'video_section'.tr(),
-                    value: effectiveSection,
-                    icon: Icons.chat_bubble_outline_rounded,
-                    items: sections
-                        .map(
-                          (section) => _DropdownChoice(
-                            value: section.code,
-                            primary: section.primary,
-                            secondary: section.secondary,
-                            icon: Icons.chat_bubble_outline_rounded,
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      setState(() => _selectedSection = value);
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              for (var index = 0;
-                  index < VideoTaxonomy.levels.length;
-                  index++) ...[
-                if (index > 0) const SizedBox(width: 8),
-                Expanded(
-                  child: _LevelButton(
-                    level: VideoTaxonomy.levels[index],
-                    selected:
-                        VideoTaxonomy.levels[index] == _selectedLevel,
-                    onTap: () => _selectLevel(VideoTaxonomy.levels[index]),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ],
-      ),
+          )),
+        ]]),
+        const SizedBox(height: 16),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(child: _FilterPicker(fieldKey: 'video-sphere', label: 'video_sphere'.tr(),
+            value: _sphere, icon: Icons.public_rounded,
+            choices: [for (final sphere in VideoTaxonomy.spheres)
+              _FilterChoice(sphere.code, sphere.label(language), sphere.secondaryLabel(language))],
+            onChanged: (value) => _changeFilter(sphere: value),
+          )),
+          const SizedBox(width: 10),
+          Expanded(child: _FilterPicker(fieldKey: 'video-section', label: 'video_section'.tr(),
+            value: selected, icon: Icons.bookmark_border_rounded,
+            choices: [for (final section in sections)
+              _FilterChoice(section.code, section.label(language),
+                  section.label(language == 'ru' ? 'ky' : 'ru'))],
+            onChanged: (value) => setState(() => _section = value),
+          )),
+        ]),
+      ]),
     );
-  }
-
-  List<_SectionChoice> _buildSectionChoices(
-    List<VideoLesson> lessons,
-    String languageCode,
-  ) {
-    final choices = <String, _SectionChoice>{};
-    final alternateLanguage = languageCode == 'ru' ? 'ky' : 'ru';
-
-    for (final section
-        in VideoTaxonomy.knownSections[_selectedSphere] ??
-            const <VideoSectionOption>[]) {
-      choices[section.code] = _SectionChoice(
-        code: section.code,
-        primary: section.label(languageCode),
-        secondary: section.label(alternateLanguage),
-      );
-    }
-
-    for (final lesson in lessons) {
-      choices.putIfAbsent(
-        lesson.section,
-        () => _SectionChoice(
-          code: lesson.section,
-          primary: VideoTaxonomy.sectionLabel(
-            sphere: lesson.sphere,
-            section: lesson.section,
-            languageCode: languageCode,
-            metadataLabel: lesson.localizedSectionTitle(languageCode),
-          ),
-          secondary: VideoTaxonomy.sectionLabel(
-            sphere: lesson.sphere,
-            section: lesson.section,
-            languageCode: alternateLanguage,
-            metadataLabel: lesson.localizedSectionTitle(alternateLanguage),
-          ),
-        ),
-      );
-    }
-
-    return choices.values.toList();
-  }
-
-  String? _effectiveSection(List<_SectionChoice> sections) {
-    if (sections.isEmpty) return null;
-    if (_selectedSection != null &&
-        sections.any((section) => section.code == _selectedSection)) {
-      return _selectedSection;
-    }
-    return sections.first.code;
-  }
-
-  void _openLesson(VideoLesson lesson) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => VideoPlayerScreen(lesson: lesson),
-      ),
-    );
-  }
-
-  IconData _sphereIcon(String sphere) {
-    switch (sphere) {
-      case 'professional':
-        return Icons.business_center_outlined;
-      case 'social_cultural':
-        return Icons.groups_outlined;
-      case 'educational':
-        return Icons.school_outlined;
-      case 'personal':
-      default:
-        return Icons.person_outline_rounded;
-    }
   }
 }
 
-class _SectionChoice {
-  final String code;
-  final String primary;
-  final String secondary;
-
-  const _SectionChoice({
-    required this.code,
-    required this.primary,
-    required this.secondary,
-  });
-}
-
-class _DropdownChoice {
+class _FilterChoice {
+  const _FilterChoice(this.value, this.title, this.secondary);
   final String value;
-  final String primary;
+  final String title;
   final String secondary;
-  final IconData icon;
-
-  const _DropdownChoice({
-    required this.value,
-    required this.primary,
-    required this.secondary,
-    required this.icon,
-  });
 }
 
-class _LabeledDropdown extends StatelessWidget {
+/// A combobox-style picker with a full-width menu so long bilingual titles fit.
+class _FilterPicker extends StatelessWidget {
+  const _FilterPicker({required this.fieldKey, required this.label, required this.value,
+    required this.icon, required this.choices, required this.onChanged});
+  final String fieldKey;
   final String label;
   final String? value;
   final IconData icon;
-  final List<_DropdownChoice> items;
+  final List<_FilterChoice> choices;
   final ValueChanged<String> onChanged;
 
-  const _LabeledDropdown({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.items,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final hasValue = value != null && items.any((item) => item.value == value);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 6),
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: Color(0xFF263451),
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        Container(
-          height: 54,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFDFEFF),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: hasValue
-                  ? const Color(0xFFC8D9F0)
-                  : const Color(0xFFE3E9F2),
-            ),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: hasValue ? value : null,
-              isExpanded: true,
-              icon: const Icon(
-                Icons.keyboard_arrow_down_rounded,
-                color: Color(0xFF315B9D),
-              ),
-              hint: Row(
-                children: [
-                  Icon(icon, size: 20, color: const Color(0xFF9AA7BC)),
-                  const SizedBox(width: 7),
-                  Expanded(
-                    child: Text(
-                      'video_no_sections_short'.tr(),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Color(0xFF9AA7BC)),
-                    ),
-                  ),
-                ],
-              ),
-              menuMaxHeight: 360,
-              itemHeight: 64,
-              items: items
-                  .map(
-                    (item) => DropdownMenuItem<String>(
-                      value: item.value,
-                      child: Row(
-                        children: [
-                          Icon(
-                            item.icon,
-                            size: 22,
-                            color: const Color(0xFF5474A8),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  item.primary,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Color(0xFF1E2941),
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                if (item.secondary.isNotEmpty &&
-                                    item.secondary != item.primary)
-                                  Text(
-                                    item.secondary,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: Color(0xFF8A96AC),
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                  .toList(),
-              selectedItemBuilder: (context) => items
-                  .map(
-                    (item) => Row(
-                      children: [
-                        Icon(item.icon, size: 20, color: const Color(0xFF2785DE)),
-                        const SizedBox(width: 7),
-                        Expanded(
-                          child: Text(
-                            item.primary,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xFF1E2941),
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                  .toList(),
-              onChanged: items.isEmpty
-                  ? null
-                  : (nextValue) {
-                      if (nextValue != null) onChanged(nextValue);
-                    },
-            ),
-          ),
-        ),
-      ],
+  Future<void> _pick(BuildContext context) async {
+    final next = await showModalBottomSheet<String>(
+      context: context, isScrollControlled: true, showDragHandle: true, backgroundColor: Colors.white,
+      constraints: const BoxConstraints(maxWidth: 640),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
+      builder: (context) => SafeArea(top: false, child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.7),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Padding(padding: const EdgeInsets.fromLTRB(24, 0, 24, 18),
+              child: Text(label, style: const TextStyle(fontSize: 22,
+                  fontWeight: FontWeight.w700, color: LearningColors.ink))),
+          Flexible(child: ListView.separated(shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 20), itemCount: choices.length,
+            separatorBuilder: (_, index) => const Divider(height: 1, indent: 12,
+                endIndent: 12, color: LearningColors.border),
+            itemBuilder: (context, index) {
+              final option = choices[index];
+              return ListTile(key: ValueKey('$fieldKey-option-${option.value}'),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                title: Text(option.title, style: const TextStyle(color: LearningColors.ink,
+                    fontWeight: FontWeight.w600)),
+                subtitle: Text(option.secondary, style: const TextStyle(color: LearningColors.muted)),
+                trailing: Icon(option.value == value ? Icons.check_circle_rounded : Icons.circle_outlined,
+                    color: option.value == value ? LearningColors.blue : LearningColors.border),
+                onTap: () => Navigator.pop(context, option.value),
+              );
+            },
+          )),
+        ]),
+      )),
     );
+    if (next != null && context.mounted && next != value) onChanged(next);
   }
-}
-
-class _LevelButton extends StatelessWidget {
-  final String level;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _LevelButton({
-    required this.level,
-    required this.selected,
-    required this.onTap,
-  });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: selected ? const Color(0xFF2499EA) : Colors.white70,
-      borderRadius: BorderRadius.circular(24),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(24),
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          height: 42,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: const Color(0xFF2499EA).withValues(alpha: 0.28),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Text(
-            level,
-            style: TextStyle(
-              color: selected ? Colors.white : const Color(0xFF1D2942),
-              fontWeight: FontWeight.w700,
-              fontSize: 15,
-            ),
+    final selected = choices.where((item) => item.value == value).firstOrNull;
+    return Semantics(button: true, enabled: choices.isNotEmpty,
+      label: '$label: ${selected?.title ?? 'video_no_sections_short'.tr()}',
+      child: Material(color: LearningColors.background, borderRadius: BorderRadius.circular(13),
+        child: InkWell(key: ValueKey(fieldKey), borderRadius: BorderRadius.circular(13),
+          onTap: choices.isEmpty ? null : () => _pick(context),
+          child: Container(constraints: const BoxConstraints(minHeight: 92),
+            padding: const EdgeInsets.all(11),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [Icon(icon, size: 14, color: LearningColors.muted),
+                const SizedBox(width: 5),
+                Expanded(child: Text(label, style: const TextStyle(fontSize: 11,
+                    color: LearningColors.muted))),
+                const Icon(Icons.expand_more_rounded, size: 16, color: LearningColors.muted),
+              ]),
+              const SizedBox(height: 7),
+              Text(selected?.title ?? 'video_no_sections_short'.tr(), style: const TextStyle(
+                  fontSize: 13, height: 1.35, fontWeight: FontWeight.w600, color: LearningColors.ink)),
+            ]),
           ),
         ),
       ),
@@ -578,236 +329,155 @@ class _LevelButton extends StatelessWidget {
   }
 }
 
-class _VideoLessonCard extends StatelessWidget {
+class _FeaturedLesson extends StatelessWidget {
+  const _FeaturedLesson({required this.lesson, required this.language, required this.onTap});
   final VideoLesson lesson;
-  final String languageCode;
+  final String language;
   final VoidCallback onTap;
 
-  const _VideoLessonCard({
-    required this.lesson,
-    required this.languageCode,
-    required this.onTap,
-  });
-
   @override
-  Widget build(BuildContext context) {
-    final title = lesson.localizedTitle(languageCode);
-    final description = lesson.localizedDescription(languageCode);
-    final orderPrefix = lesson.order > 0 ? '${lesson.order}. ' : '';
-
-    return Semantics(
-      button: true,
-      label: '$orderPrefix$title',
-      child: Material(
-        color: Colors.white.withValues(alpha: 0.94),
-        borderRadius: BorderRadius.circular(18),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final thumbnailWidth = (constraints.maxWidth * 0.46)
-                    .clamp(126.0, 170.0)
-                    .toDouble();
-
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(
-                      width: thumbnailWidth,
-                      child: AspectRatio(
-                        aspectRatio: 4 / 3,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(13),
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              Image.network(
-                                lesson.thumbnailUrl,
-                                fit: BoxFit.cover,
-                                loadingBuilder: (context, child, progress) {
-                                  if (progress == null) return child;
-                                  return const ColoredBox(
-                                    color: Color(0xFFE8F1F7),
-                                    child: Center(
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    ),
-                                  );
-                                },
-                                errorBuilder: (_, _, _) => const ColoredBox(
-                                  color: Color(0xFFDCEAF4),
-                                  child: Icon(
-                                    Icons.image_not_supported_outlined,
-                                    color: Color(0xFF7890A7),
-                                  ),
-                                ),
-                              ),
-                              Center(
-                                child: Container(
-                                  width: 46,
-                                  height: 46,
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withValues(alpha: 0.38),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: Colors.white,
-                                      width: 3,
-                                    ),
-                                  ),
-                                  child: const Icon(
-                                    Icons.play_arrow_rounded,
-                                    color: Colors.white,
-                                    size: 30,
-                                  ),
-                                ),
-                              ),
-                              Positioned(
-                                right: 5,
-                                bottom: 5,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 3,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withValues(alpha: 0.78),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    _formatDuration(lesson.duration),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(0, 5, 4, 3),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '$orderPrefix$title',
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Color(0xFF111A31),
-                                fontWeight: FontWeight.w800,
-                                fontSize: 16,
-                                height: 1.2,
-                              ),
-                            ),
-                            if (description.isNotEmpty) ...[
-                              const SizedBox(height: 6),
-                              Text(
-                                description,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Color(0xFF77849E),
-                                  fontSize: 13,
-                                  height: 1.3,
-                                ),
-                              ),
-                            ],
-                            const SizedBox(height: 10),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFE5F3FF),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                lesson.level,
-                                style: const TextStyle(
-                                  color: Color(0xFF147CD1),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
+  Widget build(BuildContext context) => Material(
+    color: Colors.white, borderRadius: BorderRadius.circular(22), clipBehavior: Clip.antiAlias,
+    child: InkWell(onTap: onTap,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        AspectRatio(aspectRatio: 16 / 9,
+          child: Stack(fit: StackFit.expand, children: [
+            LessonThumbnail(lesson: lesson),
+            const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(
+              begin: Alignment.topCenter, end: Alignment.bottomCenter,
+              colors: [Color(0x44102C4E), Color(0x0A102C4E), Color(0xF5102C4E)], stops: [0, 0.3, 1],
+            ))),
+            Positioned(top: 14, left: 14, right: 14, child: Row(children: [
+              Flexible(child: _PosterTag(
+                  label: '${lesson.level} · ${'video_lesson_number'.tr(namedArgs: {'number': '${lesson.order}'})}')),
+              const Spacer(),
+              _PosterTag(label: videoDuration(lesson.duration)),
+            ])),
+            const Align(alignment: Alignment(0, -0.2), child: DecoratedBox(
+              decoration: BoxDecoration(color: Color(0xCCFFFFFF), shape: BoxShape.circle),
+              child: Padding(padding: EdgeInsets.all(10),
+                child: Icon(Icons.play_arrow_rounded, color: LearningColors.navy, size: 34)),
+            )),
+          ]),
         ),
-      ),
-    );
-  }
-
-  String _formatDuration(int seconds) {
-    final safeSeconds = seconds < 0 ? 0 : seconds;
-    final hours = safeSeconds ~/ 3600;
-    final minutes = (safeSeconds % 3600) ~/ 60;
-    final remainingSeconds = safeSeconds % 60;
-
-    if (hours > 0) {
-      return '$hours:${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
-    }
-    return '$minutes:${remainingSeconds.toString().padLeft(2, '0')}';
-  }
+        Padding(padding: const EdgeInsets.all(18),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Text(lesson.localizedTitle(language), maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: LearningColors.ink, fontSize: 21,
+                    fontWeight: FontWeight.w700, height: 1.25)),
+            const SizedBox(height: 9),
+            if (lesson.localizedDescription(language).isNotEmpty) ...[
+              Text(lesson.localizedDescription(language), maxLines: 2, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13, height: 1.5, color: LearningColors.muted)),
+              const SizedBox(height: 16),
+            ],
+            FilledButton.icon(onPressed: onTap,
+              style: FilledButton.styleFrom(backgroundColor: LearningColors.blue,
+                  foregroundColor: Colors.white, minimumSize: const Size(0, 48),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13))),
+              icon: const Icon(Icons.play_arrow_rounded, size: 22),
+              label: Text('video_start_lesson'.tr(), style: const TextStyle(fontWeight: FontWeight.w700)),
+            ),
+          ]),
+        ),
+      ]),
+    ),
+  );
 }
 
-class _MessagePanel extends StatelessWidget {
+class _PosterTag extends StatelessWidget {
+  const _PosterTag({required this.label});
+  final String label;
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+    decoration: BoxDecoration(color: const Color(0xB3102C4E), borderRadius: BorderRadius.circular(8)),
+    child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
+        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
+  );
+}
+
+class _CompactLesson extends StatelessWidget {
+  const _CompactLesson({required this.lesson, required this.language, required this.onTap});
+  final VideoLesson lesson;
+  final String language;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.white, borderRadius: BorderRadius.circular(18), clipBehavior: Clip.antiAlias,
+    child: InkWell(onTap: onTap,
+      child: Padding(padding: const EdgeInsets.all(12), child: Row(children: [
+        SizedBox(width: 96, height: 82, child: ClipRRect(borderRadius: BorderRadius.circular(11),
+          child: Stack(fit: StackFit.expand, children: [LessonThumbnail(lesson: lesson),
+            const ColoredBox(color: Color(0x18102C4E)),
+            const Center(child: Icon(Icons.play_circle_fill_rounded, color: Colors.white, size: 30)),
+          ]))),
+        const SizedBox(width: 14),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('video_lesson_number'.tr(namedArgs: {'number': '${lesson.order}'}),
+              style: const TextStyle(fontSize: 11, color: LearningColors.muted)),
+          const SizedBox(height: 5),
+          Text(lesson.localizedTitle(language), maxLines: 2, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
+                  height: 1.3, color: LearningColors.ink)),
+          const SizedBox(height: 8),
+          Row(children: [const Icon(Icons.schedule_rounded, size: 13, color: LearningColors.muted),
+            const SizedBox(width: 4),
+            Text(videoDuration(lesson.duration), style: const TextStyle(fontSize: 12, color: LearningColors.muted)),
+          ]),
+        ])),
+        const SizedBox(width: 4),
+        const Icon(Icons.chevron_right_rounded, size: 20, color: LearningColors.muted),
+      ])),
+    ),
+  );
+}
+
+class _LibraryMessage extends StatelessWidget {
+  const _LibraryMessage({required this.icon, required this.title, required this.description,
+    this.action, this.onAction, this.premium = false});
   final IconData icon;
   final String title;
-  final String? actionLabel;
+  final String description;
+  final String? action;
   final VoidCallback? onAction;
-
-  const _MessagePanel({
-    required this.icon,
-    required this.title,
-    this.actionLabel,
-    this.onAction,
-  });
-
+  final bool premium;
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(32, 20, 32, 130),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 52, color: const Color(0xFF7E9DB8)),
-            const SizedBox(height: 14),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFF5E7188),
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            if (actionLabel != null && onAction != null) ...[
-              const SizedBox(height: 16),
-              FilledButton(onPressed: onAction, child: Text(actionLabel!)),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.symmetric(horizontal: 20), padding: const EdgeInsets.all(28),
+    decoration: BoxDecoration(color: premium ? LearningColors.navy : Colors.white,
+        borderRadius: BorderRadius.circular(22)),
+    child: Column(children: [
+      Icon(icon, size: 40, color: premium ? const Color(0xFFFFDDA5) : LearningColors.blue),
+      const SizedBox(height: 18),
+      Text(title, textAlign: TextAlign.center, style: TextStyle(fontSize: 21,
+          fontWeight: FontWeight.w700, color: premium ? Colors.white : LearningColors.ink)),
+      const SizedBox(height: 10),
+      Text(description, textAlign: TextAlign.center, style: TextStyle(fontSize: 14, height: 1.5,
+          color: premium ? const Color(0xFFCEDCED) : LearningColors.muted)),
+      if (action != null && onAction != null) ...[
+        const SizedBox(height: 24),
+        FilledButton(onPressed: onAction,
+          style: FilledButton.styleFrom(
+              backgroundColor: premium ? const Color(0xFFFFDDA5) : LearningColors.blue,
+              foregroundColor: premium ? LearningColors.navy : Colors.white,
+              minimumSize: const Size(double.infinity, 48),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13))),
+          child: Text(action!, style: const TextStyle(fontWeight: FontWeight.w700))),
+      ],
+    ]),
+  );
+}
+
+class _LoadingLessons extends StatelessWidget {
+  const _LoadingLessons();
+  @override
+  Widget build(BuildContext context) => Semantics(label: 'video_loading'.tr(),
+    child: Container(height: 230,
+      decoration: BoxDecoration(color: const Color(0xFFE5ECF4), borderRadius: BorderRadius.circular(22)),
+      child: const Center(child: SizedBox(width: 24, height: 24,
+          child: CircularProgressIndicator(strokeWidth: 2))),
+    ),
+  );
 }

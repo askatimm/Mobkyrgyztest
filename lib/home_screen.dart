@@ -3,9 +3,13 @@ import 'package:flutter/material.dart';
 import 'level_detail_screen.dart';
 import 'settings_screen.dart';
 import 'video_lessons_screen.dart';
+import 'preview/design_preview.dart';
+import 'widgets/video_design.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, this.initialIndex = 0});
+
+  final int initialIndex;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -14,6 +18,13 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   final Set<int> _visitedIndexes = {0};
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedIndex = widget.initialIndex.clamp(0, 2).toInt();
+    _visitedIndexes.add(_selectedIndex);
+  }
 
   void _onItemTapped(int index) {
     setState(() {
@@ -48,169 +59,64 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _BubbleBottomBar extends StatelessWidget {
+  const _BubbleBottomBar({required this.selectedIndex, required this.onTap});
   final int selectedIndex;
   final ValueChanged<int> onTap;
 
-  const _BubbleBottomBar({
-    required this.selectedIndex,
-    required this.onTap,
-  });
-
   @override
-  Widget build(BuildContext context) {
-    final selectedIcon = switch (selectedIndex) {
-      0 => Icons.home_rounded,
-      1 => Icons.play_arrow_rounded,
-      _ => Icons.settings_rounded,
-    };
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const horizontalMargin = 16.0;
-        const circleSize = 66.0;
-        final barWidth = constraints.maxWidth - (horizontalMargin * 2);
-        final itemWidth = barWidth / 3;
-        final selectedLeft = horizontalMargin +
-            (itemWidth * (selectedIndex + 0.5)) -
-            (circleSize / 2);
-
-        return SizedBox(
-          height: 112,
-          child: Stack(
-            clipBehavior: Clip.none,
-            alignment: Alignment.bottomCenter,
-            children: [
-              Positioned(
-                left: horizontalMargin,
-                right: horizontalMargin,
-                bottom: 12,
-                child: Container(
-                  height: 76,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(38),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.12),
-                        blurRadius: 18,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _BottomBarItem(
-                          icon: Icons.home_outlined,
-                          label: 'nav_home'.tr(),
-                          selected: selectedIndex == 0,
-                          onTap: () => onTap(0),
-                        ),
-                      ),
-                      Expanded(
-                        child: _BottomBarItem(
-                          icon: Icons.play_circle_outline_rounded,
-                          label: 'nav_video'.tr(),
-                          selected: selectedIndex == 1,
-                          onTap: () => onTap(1),
-                        ),
-                      ),
-                      Expanded(
-                        child: _BottomBarItem(
-                          icon: Icons.settings_outlined,
-                          label: 'nav_settings'.tr(),
-                          selected: selectedIndex == 2,
-                          onTap: () => onTap(2),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              AnimatedPositioned(
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeOutCubic,
-                bottom: 42,
-                left: selectedLeft,
-                child: GestureDetector(
-                  onTap: () => onTap(selectedIndex),
-                  child: Container(
-                    width: circleSize,
-                    height: circleSize,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xFF39AFF3), Color(0xFF2089E4)],
-                      ),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(
-                            0xFF2089E4,
-                          ).withValues(alpha: 0.32),
-                          blurRadius: 14,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                      border: Border.all(color: Colors.white, width: 4),
-                    ),
-                    child: Icon(selectedIcon, color: Colors.white, size: 31),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
+  Widget build(BuildContext context) => SafeArea(top: false,
+    child: Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: Container(
+        padding: const EdgeInsets.all(7),
+        decoration: BoxDecoration(color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [BoxShadow(color: LearningColors.navy.withValues(alpha: 0.08),
+              blurRadius: 24, offset: const Offset(0, 4))],
+          border: Border.all(color: LearningColors.border),
+        ),
+        child: Row(children: [
+          for (var index = 0; index < 3; index++)
+            Expanded(child: _BottomBarItem(
+              icon: [Icons.home_rounded, Icons.play_circle_outline_rounded,
+                  Icons.settings_outlined][index],
+              label: ['nav_home', 'nav_video', 'nav_settings'][index].tr(),
+              selected: index == selectedIndex, onTap: () => onTap(index),
+            )),
+        ]),
+      ),
+    ),
+  );
 }
 
 class _BottomBarItem extends StatelessWidget {
+  const _BottomBarItem({required this.icon, required this.label,
+      required this.selected, required this.onTap});
   final IconData icon;
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
-  const _BottomBarItem({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
   @override
-  Widget build(BuildContext context) {
-    final color = selected ? const Color(0xFF1686DF) : Colors.grey.shade700;
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(36),
-      onTap: onTap,
-      child: SizedBox(
-        height: double.infinity,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              color: selected ? Colors.transparent : color,
-              size: 26,
-            ),
+  Widget build(BuildContext context) => Semantics(selected: selected,
+    button: true, label: label, excludeSemantics: true,
+    child: Material(color: Colors.transparent, borderRadius: BorderRadius.circular(18),
+      child: InkWell(onTap: onTap, borderRadius: BorderRadius.circular(18),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+          decoration: BoxDecoration(color: selected ? const Color(0xFFE7EFF9) : Colors.transparent,
+              borderRadius: BorderRadius.circular(18)),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 25, color: selected ? LearningColors.blue : LearningColors.muted),
             const SizedBox(height: 5),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                color: color,
-              ),
-            ),
-          ],
+            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12, fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected ? LearningColors.blue : LearningColors.muted)),
+          ]),
         ),
       ),
-    );
-  }
+    ),
+  );
 }
 
 class HomeContent extends StatelessWidget {
@@ -238,6 +144,10 @@ class HomeContent extends StatelessWidget {
               child: Column(
                 children: [
                   const SizedBox(height: 20),
+                  if (DesignPreview.enabled) ...[
+                    const DesignPreviewNotice(),
+                    const SizedBox(height: 16),
+                  ],
                   const Text(
                     'Кыргызтест',
                     style: TextStyle(
