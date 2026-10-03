@@ -11,8 +11,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/essay_review.dart';
 import '../services/ai_writing_service.dart';
 import '../services/ai_usage_service.dart';
+import '../services/premium_service.dart';
 import '../services/daily_topic_service.dart';
 import 'screens/daily_limit_screen.dart';
+import 'screens/membership_screen.dart';
+import 'widgets/premium_feedback.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 // --- Модель QuizTask ---
@@ -163,6 +166,20 @@ class _QuizScreenState extends State<QuizScreen>
     });
 
     try {
+      try {
+        if (!await PremiumService.refreshStatus(forceRefresh: true)) {
+          if (mounted) {
+            await Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => const MembershipScreen(),
+            ));
+          }
+          return;
+        }
+      } catch (error) {
+        if (mounted) showPremiumError(context, error);
+        return;
+      }
+
       if (_remainingAiChecks <= 0) {
         if (!mounted) return;
 
@@ -171,6 +188,8 @@ class _QuizScreenState extends State<QuizScreen>
         );
         return;
       }
+
+      if (!mounted) return;
 
       debugPrint("TOPIC SENT: ${currentTask.question}");
       final review = await _aiWritingService.checkEssay(
@@ -203,6 +222,12 @@ class _QuizScreenState extends State<QuizScreen>
             .clamp(0, _maxAiChecksPerTopic)
             .toInt();
       });
+    } on AiPremiumRequiredException {
+      if (mounted) {
+        await Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => const MembershipScreen(),
+        ));
+      }
     } on AiCheckLimitException {
       if (!mounted) return;
 

@@ -31,6 +31,9 @@ class VideoLessonsService {
           .where((lesson) => lesson.hasRequiredMedia)
           .toList();
     } on FirebaseFunctionsException catch (error) {
+      if (error.code == 'unauthenticated') {
+        throw const VideoSignInRequiredException();
+      }
       if (error.code == 'permission-denied') {
         throw const VideoPremiumRequiredException();
       }
@@ -53,6 +56,9 @@ class VideoLessonsService {
       }
       return uri;
     } on FirebaseFunctionsException catch (error) {
+      if (error.code == 'unauthenticated') {
+        throw const VideoSignInRequiredException();
+      }
       if (error.code == 'permission-denied') {
         throw const VideoPremiumRequiredException();
       }
@@ -63,4 +69,8 @@ class VideoLessonsService {
 
 class VideoPremiumRequiredException implements Exception {
   const VideoPremiumRequiredException();
+}
+
+class VideoSignInRequiredException implements Exception {
+  const VideoSignInRequiredException();
 }

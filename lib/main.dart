@@ -17,7 +17,6 @@ final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  if (!DesignPreview.enabled) await PremiumService.init();
 
   // Блокируем ориентацию
   await SystemChrome.setPreferredOrientations([
@@ -28,6 +27,7 @@ void main() async {
   await EasyLocalization.ensureInitialized();
   if (!DesignPreview.enabled) {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    await PremiumService.init();
   }
 
   runApp(
@@ -49,7 +49,7 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   @override
@@ -57,6 +57,7 @@ class _MyAppState extends State<MyApp> {
     super.initState();
     // 2. Запускаем глобальный слушатель интернета
     if (DesignPreview.enabled) return;
+    WidgetsBinding.instance.addObserver(this);
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen((
       List<ConnectivityResult> results,
     ) {
@@ -68,9 +69,17 @@ class _MyAppState extends State<MyApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     // 3. Отменяем подписку при закрытии приложения
     _connectivitySubscription?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && !DesignPreview.enabled) {
+      unawaited(PremiumService.syncUserWithRevenueCat(forceRefresh: true));
+    }
   }
 
   // Функция для показа SnackBar через глобальный ключ

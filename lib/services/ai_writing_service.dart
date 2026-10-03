@@ -7,6 +7,10 @@ class AiCheckLimitException implements Exception {
   const AiCheckLimitException();
 }
 
+class AiPremiumRequiredException implements Exception {
+  const AiPremiumRequiredException();
+}
+
 class AiWritingService {
   final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
     region: 'us-central1',
@@ -45,6 +49,10 @@ class AiWritingService {
     } on FirebaseFunctionsException catch (e) {
       final code = e.code;
       final message = (e.message ?? '').toLowerCase();
+
+      if (code == 'permission-denied' && message.contains('premium_required')) {
+        throw const AiPremiumRequiredException();
+      }
 
       if (code == 'resource-exhausted' &&
           (message.contains('ai_check_limit_reached') ||
@@ -105,6 +113,10 @@ class AiWritingService {
       throw Exception(
         'Эссени текшерүүдө ката кетти. Кийинчерээк кайра аракет кылыңыз.',
       );
+    } on AiCheckLimitException {
+      rethrow;
+    } on AiPremiumRequiredException {
+      rethrow;
     } catch (e) {
       throw Exception(
         'Эссени текшерүү мүмкүн болгон жок. Кайра аракет кылыңыз.',

@@ -186,15 +186,17 @@ firebase deploy --only functions:getVideoLessons,functions:getVideoPlaybackUrl
 Firebase UID используется как RevenueCat App User ID. Приложение уже вызывает
 `Purchases.logIn(user.uid)`, поэтому эту синхронизацию необходимо сохранить.
 
-Для временного тестового доступа администратор может создать документ:
+Доступ определяется активным entitlement RevenueCat. Коллекция
+`premium_access` и клиентский `users.isPremium` не предоставляют платный доступ.
+Восстановление покупок доступно в «Настройки → Подписка Premium».
 
-```text
-premium_access/{firebaseUid}
-  isActive: true
-  expiresAt: необязательный Firestore Timestamp
-```
+Для проверок используйте Test Store в debug или Google Play License testing.
+Добавьте только тестовые Firebase UID в `revenueCat.sandboxUserIds` внутри
+`VIDEO_ACCESS_CONFIG`. Для остальных пользователей sandbox-покупки отклоняются.
+После тестов удалите лишние UID. Сам список не выдаёт Premium без покупки.
 
-Клиентам нельзя разрешать запись в коллекцию `premium_access`.
+Полный порядок подключения магазина и сборки:
+[Android release setup](android_release_setup.md).
 
 ## 6. Ожидаемое поведение
 

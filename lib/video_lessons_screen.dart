@@ -5,7 +5,8 @@ import 'models/video_lesson.dart';
 import 'models/video_taxonomy.dart';
 import 'preview/design_preview.dart';
 import 'preview/video_preview_catalog.dart';
-import 'services/premium_service.dart';
+import 'screens/login_screen.dart';
+import 'screens/membership_screen.dart';
 import 'services/video_lessons_service.dart';
 import 'video_player_screen.dart';
 import 'widgets/video_design.dart';
@@ -55,7 +56,16 @@ class _VideoLessonsScreenState extends State<VideoLessonsScreen> {
   }
 
   Future<void> _showPaywall() async {
-    await PremiumService.showPaywall();
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => const MembershipScreen(),
+    ));
+    if (mounted) await _refresh();
+  }
+
+  Future<void> _signIn() async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => const LoginScreen(),
+    ));
     if (mounted) await _refresh();
   }
 
@@ -156,6 +166,13 @@ class _VideoLessonsScreenState extends State<VideoLessonsScreen> {
                     if (loading)
                       const SliverPadding(padding: EdgeInsets.symmetric(horizontal: 20),
                           sliver: SliverToBoxAdapter(child: _LoadingLessons()))
+                    else if (snapshot.error is VideoSignInRequiredException)
+                      SliverToBoxAdapter(child: _LibraryMessage(
+                        icon: Icons.person_outline_rounded,
+                        title: 'premium_sign_in'.tr(),
+                        description: 'premium_sign_in_required'.tr(),
+                        action: 'premium_sign_in'.tr(), onAction: _signIn,
+                      ))
                     else if (snapshot.error is VideoPremiumRequiredException)
                       SliverToBoxAdapter(child: _LibraryMessage(
                         icon: Icons.workspace_premium_rounded, title: 'video_premium_title'.tr(),
