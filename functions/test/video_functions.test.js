@@ -20,7 +20,7 @@ function handlers({ premium = true, unavailable = false, active = true } = {}) {
     "firebase-functions/v2": { setGlobalOptions() {} },
     "firebase-functions/v2/https": { HttpsError, onCall: (_, callback) => callback },
     "firebase-functions/params": { defineJsonSecret: () => ({ value: () => config }) },
-    "firebase-functions/logger": { warn() {}, error() {} },
+    "firebase-functions/logger": { info() {}, warn() {}, error() {} },
     "firebase-admin/app": { initializeApp() {} },
     "firebase-admin/firestore": { getFirestore: () => ({ collection(name) {
       calls.firestore++;
@@ -98,4 +98,22 @@ test("non-Premium users cannot receive even thumbnail URLs", async () => {
   }), { code: "permission-denied" });
   assert.equal(app.calls.firestore, 0);
   assert.equal(app.calls.signed.length, 0);
+});
+
+test("AI writing rejects a forged Premium flag before reading topics or charging usage", async () => {
+  const app = handlers({ premium: false });
+  await assert.rejects(app.checkEssay({ auth: { uid: "actual-user" }, data: {
+    essay: "A test essay", levelId: "level_b2", taskId: "task-1",
+    uid: "paid-user", isPremium: true,
+  } }), { code: "permission-denied", message: "PREMIUM_REQUIRED" });
+  assert.deepEqual(app.calls.premium, ["actual-user"]);
+  assert.equal(app.calls.firestore, 0);
+});
+
+test("AI writing fails closed when RevenueCat cannot verify a subscription", async () => {
+  const app = handlers({ unavailable: true });
+  await assert.rejects(app.checkEssay({ auth: { uid: "user" }, data: {
+    essay: "A test essay", levelId: "level_c1", taskId: "task-1",
+  } }), { code: "unavailable" });
+  assert.equal(app.calls.firestore, 0);
 });

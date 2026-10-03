@@ -53,6 +53,15 @@ function videoConfig() {
   return { minio, revenueCat };
 }
 
+function premiumConfig() {
+  const revenueCat = VIDEO_ACCESS_CONFIG.value()?.revenueCat;
+  if (!revenueCat?.apiKey || !revenueCat?.entitlementId) {
+    logger.error("RevenueCat premium access is not configured");
+    throw new HttpsError("internal", "Premium access is not configured");
+  }
+  return revenueCat;
+}
+
 function createMinioClient(config) {
   const useSSL = config.useSSL !== false;
   const port = Number(config.port || (useSSL ? 443 : 80));
@@ -377,6 +386,7 @@ exports.checkEssay = onCall(
   {
     region: "us-central1",
     invoker: "public",
+    secrets: [VIDEO_ACCESS_CONFIG],
   },
   async (request) => {
     logger.info("checkEssay START", {
@@ -416,6 +426,9 @@ exports.checkEssay = onCall(
           "Invalid writing topic"
         );
       }
+
+      // Authorize before reading topics, charging usage, or calling an AI model.
+      await requirePremium(request.auth.uid, premiumConfig());
 
       const userId = request.auth.uid;
       const dailyTopicRef = db
