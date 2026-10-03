@@ -14,7 +14,6 @@ import '../services/ai_usage_service.dart';
 import '../services/premium_service.dart';
 import '../services/daily_topic_service.dart';
 import 'screens/daily_limit_screen.dart';
-import 'screens/membership_screen.dart';
 import 'widgets/premium_feedback.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -169,9 +168,7 @@ class _QuizScreenState extends State<QuizScreen>
       try {
         if (!await PremiumService.refreshStatus(forceRefresh: true)) {
           if (mounted) {
-            await Navigator.of(context).push(MaterialPageRoute<void>(
-              builder: (_) => const MembershipScreen(),
-            ));
+            await openPremiumPaywall(context);
           }
           return;
         }
@@ -224,9 +221,7 @@ class _QuizScreenState extends State<QuizScreen>
       });
     } on AiPremiumRequiredException {
       if (mounted) {
-        await Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) => const MembershipScreen(),
-        ));
+        await openPremiumPaywall(context);
       }
     } on AiCheckLimitException {
       if (!mounted) return;

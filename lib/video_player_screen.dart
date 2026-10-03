@@ -8,9 +8,9 @@ import 'package:video_player/video_player.dart';
 import 'models/video_lesson.dart';
 import 'models/video_taxonomy.dart';
 import 'preview/design_preview.dart';
-import 'screens/membership_screen.dart';
 import 'screens/login_screen.dart';
 import 'services/video_lessons_service.dart';
+import 'widgets/premium_feedback.dart';
 import 'widgets/video_design.dart';
 
 class VideoPlayerScreen extends StatefulWidget {
@@ -140,9 +140,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> with WidgetsBindi
   }
 
   Future<void> _openPaywall() async {
-    await Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => const MembershipScreen(),
-    ));
+    await openPremiumPaywall(context);
     if (mounted) await _initializeVideo();
   }
 

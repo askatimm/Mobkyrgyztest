@@ -6,10 +6,10 @@ import 'models/video_taxonomy.dart';
 import 'preview/design_preview.dart';
 import 'preview/video_preview_catalog.dart';
 import 'screens/login_screen.dart';
-import 'screens/membership_screen.dart';
 import 'services/video_lessons_service.dart';
 import 'video_player_screen.dart';
 import 'widgets/video_design.dart';
+import 'widgets/premium_feedback.dart';
 
 class VideoLessonsScreen extends StatefulWidget {
   const VideoLessonsScreen({super.key});
@@ -56,9 +56,7 @@ class _VideoLessonsScreenState extends State<VideoLessonsScreen> {
   }
 
   Future<void> _showPaywall() async {
-    await Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => const MembershipScreen(),
-    ));
+    await openPremiumPaywall(context);
     if (mounted) await _refresh();
   }
 

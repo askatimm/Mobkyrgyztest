@@ -6,6 +6,8 @@ import '../services/auth_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/membership_screen.dart';
 import 'screens/account_privacy_screen.dart';
+import 'services/premium_service.dart';
+import 'widgets/premium_feedback.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'preview/design_preview.dart';
 import 'widgets/video_design.dart';
@@ -21,6 +23,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isSoundEnabled = true;
   String _avatarPath = 'assets/images/avatar_1.jpeg';
   String _previewName = '';
+
+  Future<void> _openPremium() async {
+    if (DesignPreview.enabled || PremiumService.premiumStatus.value) {
+      await Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => const MembershipScreen(),
+      ));
+      return;
+    }
+    await openPremiumPaywall(context);
+  }
 
   @override
   void initState() {
@@ -330,9 +342,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: Text('premium_membership'.tr()),
                     subtitle: Text('premium_restore_and_manage'.tr()),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                      builder: (_) => const MembershipScreen(),
-                    )),
+                    onTap: _openPremium,
                   ),
                   const Divider(height: 1),
                   ListTile(
