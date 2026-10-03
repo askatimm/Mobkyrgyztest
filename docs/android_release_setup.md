@@ -4,6 +4,33 @@
 Первая площадка — Google Play. Аккаунт разработчика пока не создан, проект
 RevenueCat уже есть. IIS/MinIO для этой работы перенастраивать не нужно.
 
+## 0. Проверить доступность продаж для страны владельца
+
+Владелец/получатель выплат указал **Кыргызстан**. На 3 октября 2026 года
+официальная таблица Google разрешает developer registration для Кыргызстана,
+но **не поддерживает merchant registration**. Поэтому регистрация за $25 сама
+по себе не позволит создать работающие платные подписки Google Play.
+Сначала решите способ продажи, затем оплачивайте аккаунт для выбранного пути.
+RevenueCat SDK не меняет доступность Google Play merchant registration.
+
+Подготовленная в этом PR интеграция Google Play подходит для фактического
+владельца с поддерживаемым merchant profile. Нельзя указывать вымышленную
+страну/адрес или чужие платёжные данные. Если такой владелец отсутствует,
+согласуйте иной способ монетизации до production.
+
+Google разрешает **consumption-only** приложение: пользователь входит и
+просматривает материалы, доступ к которым куплен вне приложения. Для этого
+нужен отдельный действующий сервис продаж и серверная выдача/отзыв доступа;
+покупки внутри Play-версии должны отсутствовать. Текущий PR не реализует этот
+вариант и не подключает местный эквайринг. Прямая кнопка внешней оплаты в
+Play-приложении не становится разрешённой из-за страны владельца: применимость
+исключений нужно проверять по Payments policy и у Google Play Support.
+
+До решения вопроса продаж можно проверить дизайн и покупки **RevenueCat Test
+Store в debug-сборке**, без настоящих списаний и без Google Play merchant
+account. Это следующий технический шаг. Инструкция ниже про подписки Google
+Play выполняется только после подтверждения подходящего merchant profile.
+
 ## 1. Создать аккаунт Google Play
 
 Откройте [Play Console](https://play.google.com/console/signup).
@@ -70,6 +97,27 @@ plan. Идентификатор, период и цена выбираются 
 **debug**-сборке с `REVENUECAT_ANDROID_KEY=test_…`. Создайте Test Store products,
 прикрепите к тому же entitlement и Current Offering. Это не настоящая оплата
 Google Play. Test Store ключ не должен попасть в магазин.
+
+1. В RevenueCat откройте проект → **Apps and providers → Test configuration**.
+   Откройте Test Store; если его нет, создайте его.
+2. В **Product catalog → Products** создайте тестовую месячную подписку
+   с тестовой ценой. Прикрепите её к entitlement `KyrgyzTest Pro`.
+3. В **Offerings** добавьте тестовый продукт к package вашего Current Offering.
+   Проверьте paywall этого Offering.
+4. Скопируйте `config/test-store.example.json` в `config/test-store.json` и
+   локально подставьте публичный Test Store SDK key `test_…`.
+5. Запустите на Android:
+
+```bash
+flutter run --dart-define-from-file=config/test-store.json
+```
+
+Флаг `DESIGN_PREVIEW` здесь не нужен: этот режим отключает настоящие обращения
+к Firebase/RevenueCat. Войдите своим Firebase-аккаунтом, откройте Premium,
+проверьте успешную/отменённую/ошибочную покупку и восстановление. Для просмотра
+закрытого видео нужен также ваш UID в серверном `sandboxUserIds` и развёрнутые
+видео-функции из шага 4. Test Store не заменяет проверку Google Play Billing
+перед выпуском варианта с покупками внутри приложения.
 
 ## 4. Firebase и приватные видео
 
@@ -204,10 +252,13 @@ CI проверяет Flutter анализ/тесты, demo-тесты, debug AP
 ## Официальные инструкции
 
 - [Регистрация Google Play](https://support.google.com/googleplay/android-developer/answer/6112435)
+- [Страны разработчиков и продавцов](https://support.google.com/googleplay/android-developer/answer/9306917)
+- [Google Play Payments policy и consumption-only](https://support.google.com/googleplay/android-developer/answer/10281818)
 - [Тестирование новых личных аккаунтов](https://support.google.com/googleplay/android-developer/answer/14151465)
 - [Target API](https://support.google.com/googleplay/android-developer/answer/11926878)
 - [Удаление аккаунтов](https://support.google.com/googleplay/android-developer/answer/13327111)
 - [RevenueCat: конфигурация SDK и Test Store](https://www.revenuecat.com/docs/getting-started/configuring-sdk)
+- [RevenueCat: создание Test Store](https://www.revenuecat.com/docs/test-and-launch/sandbox/test-store)
 - [RevenueCat: Google Play credentials](https://www.revenuecat.com/docs/service-credentials/creating-play-service-credentials)
 - [RevenueCat: восстановление покупок](https://www.revenuecat.com/docs/getting-started/restoring-purchases)
 - [Flutter: Android release signing](https://docs.flutter.dev/deployment/android)
