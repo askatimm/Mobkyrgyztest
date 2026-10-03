@@ -57,15 +57,19 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> with WidgetsBindi
       await controller.setVolume(_isMuted ? 0 : 1);
       if (mounted) setState(() {});
     } on VideoSignInRequiredException {
-      if (mounted) setState(() {
-        _signInRequired = true;
-        _errorMessage = 'premium_sign_in_required'.tr();
-      });
+      if (mounted) {
+        setState(() {
+          _signInRequired = true;
+          _errorMessage = 'premium_sign_in_required'.tr();
+        });
+      }
     } on VideoPremiumRequiredException {
-      if (mounted) setState(() {
-        _premiumRequired = true;
-        _errorMessage = 'video_premium_required'.tr();
-      });
+      if (mounted) {
+        setState(() {
+          _premiumRequired = true;
+          _errorMessage = 'video_premium_required'.tr();
+        });
+      }
     } catch (_) {
       if (mounted) setState(() => _errorMessage = 'video_playback_error'.tr());
     } finally {

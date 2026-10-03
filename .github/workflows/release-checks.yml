@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, agent/revenuecat-release-preparation]
+    branches: [main]
 
 permissions:
   contents: read
@@ -39,7 +39,7 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - run: flutter analyze
       - run: flutter test
       - run: flutter test --dart-define=DESIGN_PREVIEW=true
       - run: flutter build apk --debug
