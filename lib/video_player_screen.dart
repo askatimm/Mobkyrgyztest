@@ -8,7 +8,8 @@ import 'package:video_player/video_player.dart';
 import 'models/video_lesson.dart';
 import 'models/video_taxonomy.dart';
 import 'preview/design_preview.dart';
-import 'services/premium_service.dart';
+import 'screens/membership_screen.dart';
+import 'screens/login_screen.dart';
 import 'services/video_lessons_service.dart';
 import 'widgets/video_design.dart';
 
@@ -26,6 +27,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> with WidgetsBindi
   String? _errorMessage;
   bool _initializing = false;
   bool _premiumRequired = false;
+  bool _signInRequired = false;
   bool _isFullscreen = false;
   bool _isMuted = false;
 
@@ -39,7 +41,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> with WidgetsBindi
   Future<void> _initializeVideo() async {
     if (_initializing || DesignPreview.enabled) return;
     _initializing = true;
-    setState(() { _errorMessage = null; _premiumRequired = false; });
+    setState(() { _errorMessage = null; _premiumRequired = false; _signInRequired = false; });
     try {
       final previous = _controller;
       _controller = null;
@@ -54,6 +56,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> with WidgetsBindi
       if (!mounted) return;
       await controller.setVolume(_isMuted ? 0 : 1);
       if (mounted) setState(() {});
+    } on VideoSignInRequiredException {
+      if (mounted) setState(() {
+        _signInRequired = true;
+        _errorMessage = 'premium_sign_in_required'.tr();
+      });
     } on VideoPremiumRequiredException {
       if (mounted) setState(() {
         _premiumRequired = true;
@@ -129,7 +136,16 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> with WidgetsBindi
   }
 
   Future<void> _openPaywall() async {
-    await PremiumService.showPaywall();
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => const MembershipScreen(),
+    ));
+    if (mounted) await _initializeVideo();
+  }
+
+  Future<void> _signIn() async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => const LoginScreen(),
+    ));
     if (mounted) await _initializeVideo();
   }
 
@@ -297,9 +313,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> with WidgetsBindi
       Text(_errorMessage!, textAlign: TextAlign.center,
           style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.4)),
       const SizedBox(height: 4),
-      TextButton(onPressed: _premiumRequired ? _openPaywall : _initializeVideo,
+      TextButton(onPressed: _signInRequired ? _signIn : _premiumRequired ? _openPaywall : _initializeVideo,
           style: TextButton.styleFrom(foregroundColor: const Color(0xFFFFDDA5)),
-          child: Text(_premiumRequired ? 'video_open_paywall'.tr() : 'retry'.tr())),
+          child: Text(_signInRequired ? 'premium_sign_in'.tr() : _premiumRequired ? 'video_open_paywall'.tr() : 'retry'.tr())),
     ]),
   ));
 

@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:easy_localization/easy_localization.dart';
 
 import '../home_screen.dart';
+import '../widgets/legal_policy_links.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -316,6 +317,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       ),
                               ),
                             ),
+                            const SizedBox(height: 12),
+                            const LegalPolicyLinks(),
                           ],
                         ),
                       ),

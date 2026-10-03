@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../widgets/legal_policy_links.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:easy_localization/easy_localization.dart';
 
@@ -328,6 +329,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
 
                           const SizedBox(height: 12),
+                          const LegalPolicyLinks(),
 
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,

@@ -4,6 +4,8 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/auth_service.dart';
 import 'screens/login_screen.dart';
+import 'screens/membership_screen.dart';
+import 'screens/account_privacy_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'preview/design_preview.dart';
 import 'widgets/video_design.dart';
@@ -323,6 +325,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 /// ===== OTHER SETTINGS =====
                 _settingsContainer([
+                  ListTile(
+                    leading: const Icon(Icons.workspace_premium_rounded, color: LearningColors.blue),
+                    title: Text('premium_membership'.tr()),
+                    subtitle: Text('premium_restore_and_manage'.tr()),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => const MembershipScreen(),
+                    )),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.privacy_tip_outlined, color: LearningColors.blue),
+                    title: Text('account_privacy'.tr()),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                      builder: (_) => const AccountPrivacyScreen(),
+                    )),
+                  ),
+                  const Divider(height: 1),
                   ListTile(
                     leading: const Icon(
                       Icons.feedback_outlined,

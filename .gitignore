@@ -48,3 +48,9 @@ functions/.env
 functions/.env.local
 functions/.env.dev
 functions/.env.prod
+functions/.env.*
+functions/.secret.local
+functions/node_modules/
+/config/release.json
+/config/test-store.json
+/release-secrets/

@@ -6,6 +6,7 @@ const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { S3Client, GetObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+const { hasRevenueCatEntitlement, RevenueCatUnavailableError } = require("./lib/video_access");
 
 initializeApp();
 
@@ -84,47 +85,17 @@ function requireObjectKey(value, fieldName) {
   return key;
 }
 
-async function hasAdminPremiumOverride(uid) {
-  const snapshot = await db.collection("premium_access").doc(uid).get();
-  if (!snapshot.exists || snapshot.data()?.isActive !== true) return false;
-
-  const expiresAt = snapshot.data()?.expiresAt;
-  return !expiresAt || expiresAt.toMillis() > Date.now();
-}
-
-async function hasRevenueCatEntitlement(uid, config) {
-  const response = await fetch(
-    `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(uid)}`,
-    {
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        Accept: "application/json",
-      },
-    }
-  );
-
-  if (!response.ok) {
-    logger.error("RevenueCat premium lookup failed", {
-      uid,
-      status: response.status,
-    });
-    throw new HttpsError("unavailable", "Premium status is unavailable");
-  }
-
-  const customer = await response.json();
-  const entitlement =
-    customer?.subscriber?.entitlements?.[config.entitlementId];
-  if (!entitlement) return false;
-
-  const expiresDate = entitlement.expires_date;
-  return expiresDate == null || Date.parse(expiresDate) > Date.now();
-}
-
 async function requirePremium(uid, config) {
-  if (await hasAdminPremiumOverride(uid)) return;
-
-  if (!(await hasRevenueCatEntitlement(uid, config))) {
-    throw new HttpsError("permission-denied", "PREMIUM_REQUIRED");
+  try {
+    if (!(await hasRevenueCatEntitlement(uid, config))) {
+      throw new HttpsError("permission-denied", "PREMIUM_REQUIRED");
+    }
+  } catch (error) {
+    if (error instanceof RevenueCatUnavailableError) {
+      logger.warn("RevenueCat premium lookup unavailable", { status: error.status ?? null });
+      throw new HttpsError("unavailable", "Premium status is unavailable");
+    }
+    throw error;
   }
 }
 
