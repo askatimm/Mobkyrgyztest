@@ -189,6 +189,8 @@ class _QuizScreenState extends State<QuizScreen>
         return;
       }
 
+      if (!mounted) return;
+
       debugPrint("TOPIC SENT: ${currentTask.question}");
       final review = await _aiWritingService.checkEssay(
         context: context,
