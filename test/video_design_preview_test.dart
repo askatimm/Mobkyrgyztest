@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -5,6 +8,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:kyrgyztestapp/home_screen.dart';
 import 'package:kyrgyztestapp/preview/design_preview.dart';
+import 'package:kyrgyztestapp/video_lessons_screen.dart';
+
+// Use the production translation files, while avoiding real asynchronous file
+// I/O inside the widget test's fake clock.
+class _PreviewAssetLoader extends AssetLoader {
+  const _PreviewAssetLoader();
+
+  @override
+  Future<Map<String, dynamic>> load(String path, Locale locale) async =>
+      jsonDecode(File('$path/${locale.languageCode}.json').readAsStringSync())
+          as Map<String, dynamic>;
+}
 
 Future<void> mountPreview(WidgetTester tester, {
   String language = 'ky', double width = 390, double scale = 1,
@@ -14,6 +29,8 @@ Future<void> mountPreview(WidgetTester tester, {
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(EasyLocalization(
+    key: ValueKey('preview-$language-$width-$scale'),
+    assetLoader: const _PreviewAssetLoader(),
     supportedLocales: const [Locale('ky'), Locale('ru')],
     path: 'assets/translations', startLocale: Locale(language),
     fallbackLocale: const Locale('ru'), saveLocale: false,
@@ -28,6 +45,7 @@ Future<void> mountPreview(WidgetTester tester, {
     )),
   ));
   await tester.pumpAndSettle();
+  expect(find.byKey(const ValueKey('video-sphere')), findsOneWidget);
 }
 
 void main() {
@@ -52,6 +70,9 @@ void main() {
     expect(find.text('Иш жолугушуусу: алгачкы кадам'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('video-level-B2')));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Жумуш ордунда: алгачкы кадам'), 150,
+      scrollable: find.descendant(of: find.byType(VideoLessonsScreen),
+        matching: find.byType(Scrollable)).first);
     expect(find.text('Жумуш ордунда: алгачкы кадам'), findsOneWidget);
     expect(find.textContaining('B2 ·'), findsOneWidget);
     expect(tester.takeException(), isNull);
