@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:kyrgyztestapp/home_screen.dart';
 import 'package:kyrgyztestapp/preview/design_preview.dart';
+import 'package:kyrgyztestapp/video_player_screen.dart';
 
 // Use the production translation files, while avoiding real asynchronous file
 // I/O inside the widget test's fake clock.
@@ -88,7 +89,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Демо · плеердин дизайны'), findsOneWidget);
     final next = find.text('Кийинки сабак');
-    await tester.ensureVisible(next);
+    await tester.scrollUntilVisible(next, 200,
+      scrollable: find.descendant(of: find.byType(VideoPlayerScreen),
+        matching: find.byType(Scrollable)).first);
     await tester.pumpAndSettle();
     await tester.tap(next);
     await tester.pumpAndSettle();
@@ -116,8 +119,12 @@ void main() {
         testWidgets('video layout: $language, ${width}px, ${scale}x text', (tester) async {
           await mountPreview(tester, width: width, language: language, scale: scale);
           expect(tester.takeException(), isNull);
-          await tester.tap(find.byKey(const ValueKey('video-sphere')));
+          final sphere = find.byKey(const ValueKey('video-sphere'));
+          await tester.ensureVisible(sphere);
           await tester.pumpAndSettle();
+          await tester.tap(sphere);
+          await tester.pumpAndSettle();
+          expect(find.byKey(const ValueKey('video-sphere-option-professional')), findsOneWidget);
           expect(tester.takeException(), isNull);
         }, skip: !DesignPreview.enabled);
       }
