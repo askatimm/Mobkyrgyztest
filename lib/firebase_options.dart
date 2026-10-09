@@ -51,7 +51,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyAAcBWV8SEitiZSNKFiyVf0qhzACRxy4nU',
-    appId: '1:313802675672:android:e475fd7d2771156e61cead',
+    appId: '1:313802675672:android:e3528165ee26967261cead',
     messagingSenderId: '313802675672',
     projectId: 'kyrgyztest-app',
     storageBucket: 'kyrgyztest-app.firebasestorage.app',
