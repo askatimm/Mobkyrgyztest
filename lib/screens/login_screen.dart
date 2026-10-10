@@ -13,7 +13,10 @@ import 'forgot_password_screen.dart';
 import '../services/premium_service.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.returnToPreviousOnSuccess = false});
+
+  /// Resume a purchase or protected action after signing in.
+  final bool returnToPreviousOnSuccess;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -33,6 +36,11 @@ class _LoginScreenState extends State<LoginScreen> {
     await prefs.setBool('login_seen', true);
 
     if (!mounted) return;
+
+    if (widget.returnToPreviousOnSuccess) {
+      Navigator.of(context).pop(true);
+      return;
+    }
 
     Navigator.pushReplacement(
       context,
@@ -331,8 +339,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           const SizedBox(height: 12),
                           const LegalPolicyLinks(),
 
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                          Wrap(
+                            alignment: WrapAlignment.center,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               Text(
                                 'no_account'.tr(),
@@ -345,13 +354,18 @@ class _LoginScreenState extends State<LoginScreen> {
                                 onPressed: _isLoading
                                     ? null
                                     : () {
-                                        Navigator.push(
+                                        Navigator.push<bool>(
                                           context,
                                           MaterialPageRoute(
-                                            builder: (_) =>
-                                                const RegisterScreen(),
+                                            builder: (_) => RegisterScreen(
+                                              returnToLoginOnSuccess: widget.returnToPreviousOnSuccess,
+                                            ),
                                           ),
-                                        );
+                                        ).then((registered) {
+                                          if (registered == true && mounted) {
+                                            _goToHome();
+                                          }
+                                        });
                                       },
                                 style: TextButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(

@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:easy_localization/easy_localization.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'models/video_lesson.dart';
@@ -24,12 +27,31 @@ class _VideoLessonsScreenState extends State<VideoLessonsScreen> {
   String _sphere = VideoTaxonomy.spheres.first.code;
   String? _section;
   bool _openingPaywall = false;
+  StreamSubscription<User?>? _authSubscription;
+  String? _currentUid;
   late Future<VideoLessonCatalog> _lessonsFuture;
 
   @override
   void initState() {
     super.initState();
     _loadLessons();
+    if (!DesignPreview.enabled) {
+      _currentUid = FirebaseAuth.instance.currentUser?.uid;
+      _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
+        if (!mounted || _currentUid == user?.uid) return;
+        _currentUid = user?.uid;
+        setState(() {
+          _section = null;
+          _loadLessons();
+        });
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
   }
 
   void _loadLessons() {
@@ -104,7 +126,7 @@ class _VideoLessonsScreenState extends State<VideoLessonsScreen> {
 
   Future<void> _signIn() async {
     await Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => const LoginScreen(),
+      builder: (_) => const LoginScreen(returnToPreviousOnSuccess: true),
     ));
     if (mounted) await _refresh();
   }
