@@ -125,13 +125,18 @@ class PremiumService {
     }
   }
 
-  static Future<bool> showPaywall() => _runBilling((uid) async {
+  static Future<bool> showPaywall({bool serverDenied = false}) => _runBilling((uid) async {
     // Test Store subscriptions can expire while the SDK still holds a cached
     // active entitlement. Refresh before deciding to skip the purchase screen.
     await Purchases.invalidateCustomerInfoCache();
     final existing = await Purchases.getCustomerInfo();
     if (existing.entitlements.active.containsKey(PremiumConfig.entitlementId)) {
-      return existing;
+      if (!serverDenied) return existing;
+      // The video backend has already rejected this UID. Only Test Store
+      // debug builds may offer a new simulated purchase in this mismatch.
+      if (!(kDebugMode && PremiumConfig.androidApiKey.startsWith('test_'))) {
+        throw const PremiumAccessMismatchException();
+      }
     }
     final offerings = await Purchases.getOfferings();
     final offering = PremiumConfig.offeringId.isEmpty
@@ -167,4 +172,8 @@ class PremiumProductsUnavailableException implements Exception {
 
 class PremiumBusyException implements Exception {
   const PremiumBusyException();
+}
+
+class PremiumAccessMismatchException implements Exception {
+  const PremiumAccessMismatchException();
 }
