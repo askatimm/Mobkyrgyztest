@@ -20,7 +20,7 @@ Future<bool> openPremiumPaywall(BuildContext context, {bool serverDenied = false
   var user = FirebaseAuth.instance.currentUser;
   if (user == null || user.isAnonymous) {
     await Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => const LoginScreen(),
+      builder: (_) => const LoginScreen(returnToPreviousOnSuccess: true),
     ));
     if (!context.mounted) return false;
     user = FirebaseAuth.instance.currentUser;
