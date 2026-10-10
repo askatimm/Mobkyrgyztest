@@ -9,7 +9,7 @@ import '../services/premium_session.dart';
 
 /// Opens the purchase screen from the current page, without an intermediate
 /// membership page. The SDK is only called after a Firebase user signs in.
-Future<bool> openPremiumPaywall(BuildContext context) async {
+Future<bool> openPremiumPaywall(BuildContext context, {bool serverDenied = false}) async {
   if (DesignPreview.enabled) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('design_preview_action'.tr())),
@@ -28,7 +28,7 @@ Future<bool> openPremiumPaywall(BuildContext context) async {
   }
 
   try {
-    return await PremiumService.showPaywall();
+    return await PremiumService.showPaywall(serverDenied: serverDenied);
   } catch (error) {
     if (context.mounted) showPremiumError(context, error);
     return false;
@@ -41,6 +41,7 @@ void showPremiumError(BuildContext context, Object error) {
     PremiumAccountChangedException() => 'premium_account_changed',
     PremiumProductsUnavailableException() => 'premium_products_unavailable',
     PremiumBusyException() => 'premium_busy',
+    PremiumAccessMismatchException() => 'premium_access_mismatch',
     _ => 'premium_unavailable',
   };
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(key.tr())));
