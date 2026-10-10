@@ -8,7 +8,7 @@ class VideoLessonsService {
 
   final FirebaseFunctions _functions;
 
-  Future<List<VideoLesson>> fetchActiveLessons({
+  Future<VideoLessonCatalog> fetchActiveLessons({
     required String level,
     required String sphere,
   }) async {
@@ -20,7 +20,7 @@ class VideoLessonsService {
       final payload = Map<String, dynamic>.from(result.data as Map);
       final rows = (payload['lessons'] as List? ?? const <Object>[]);
 
-      return rows
+      final lessons = rows
           .map((row) => Map<String, dynamic>.from(row as Map))
           .map(
             (row) => VideoLesson.fromMap(
@@ -30,6 +30,13 @@ class VideoLessonsService {
           )
           .where((lesson) => lesson.hasRequiredMedia)
           .toList();
+      final levels = (payload['availableLevels'] as List? ?? const <Object>[])
+          .map((value) => value.toString())
+          .where((value) => const ['A1', 'A2', 'B1', 'B2', 'C1'].contains(value))
+          .toList();
+      // Older deployments do not send availableLevels yet.
+      if (levels.isEmpty && lessons.isNotEmpty) levels.add(level);
+      return VideoLessonCatalog(lessons: lessons, availableLevels: levels);
     } on FirebaseFunctionsException catch (error) {
       if (error.code == 'unauthenticated') {
         throw const VideoSignInRequiredException();
@@ -73,4 +80,11 @@ class VideoPremiumRequiredException implements Exception {
 
 class VideoSignInRequiredException implements Exception {
   const VideoSignInRequiredException();
+}
+
+class VideoLessonCatalog {
+  const VideoLessonCatalog({required this.lessons, required this.availableLevels});
+
+  final List<VideoLesson> lessons;
+  final List<String> availableLevels;
 }
