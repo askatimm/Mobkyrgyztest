@@ -7,7 +7,7 @@ const { RevenueCatUnavailableError } = require("../lib/video_access");
 
 // Exercise the actual callable handlers without Firebase credentials or S3.
 function handlers({ premium = true, unavailable = false, active = true } = {}) {
-  const calls = { premium: [], firestore: 0, signed: [] };
+  const calls = { premium: [], firestore: 0, signed: [], options: [] };
   class HttpsError extends Error {
     constructor(code, message) { super(message); this.code = code; }
   }
@@ -18,8 +18,11 @@ function handlers({ premium = true, unavailable = false, active = true } = {}) {
   };
   const modules = {
     "firebase-functions/v2": { setGlobalOptions() {} },
-    "firebase-functions/v2/https": { HttpsError, onCall: (_, callback) => callback },
-    "firebase-functions/params": { defineJsonSecret: () => ({ value: () => config }) },
+    "firebase-functions/v2/https": { HttpsError, onCall: (options, callback) => {
+      calls.options.push(options);
+      return callback;
+    } },
+    "firebase-functions/params": { defineJsonSecret: (name) => ({ name, value: () => config }) },
     "firebase-functions/logger": { info() {}, warn() {}, error() {} },
     "firebase-admin/app": { initializeApp() {} },
     "firebase-admin/firestore": { getFirestore: () => ({ collection(name) {
@@ -108,6 +111,12 @@ test("AI writing rejects a forged Premium flag before reading topics or charging
   } }), { code: "permission-denied", message: "PREMIUM_REQUIRED" });
   assert.deepEqual(app.calls.premium, ["actual-user"]);
   assert.equal(app.calls.firestore, 0);
+});
+
+test("AI writing binds the Premium and both provider secrets", () => {
+  const app = handlers();
+  const secrets = app.calls.options[2].secrets.map((secret) => secret.name || secret);
+  assert.deepEqual(Array.from(secrets), ["VIDEO_ACCESS_CONFIG", "GEMINI_API_KEY", "OPENAI_API_KEY"]);
 });
 
 test("AI writing fails closed when RevenueCat cannot verify a subscription", async () => {
