@@ -104,7 +104,7 @@ class _VideoLessonsScreenState extends State<VideoLessonsScreen> {
 
   Future<void> _signIn() async {
     await Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => const LoginScreen(),
+      builder: (_) => const LoginScreen(returnToPreviousOnSuccess: true),
     ));
     if (mounted) await _refresh();
   }
