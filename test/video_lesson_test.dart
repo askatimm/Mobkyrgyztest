@@ -45,7 +45,7 @@ void main() {
     });
   });
 
-  test('personal sphere contains the six required sections', () {
+  test('all spheres expose the same six sections', () {
     final sections = VideoTaxonomy.knownSections['personal']!;
 
     expect(
@@ -60,5 +60,8 @@ void main() {
       ]),
     );
     expect(sections, hasLength(6));
+    for (final sphere in VideoTaxonomy.spheres) {
+      expect(VideoTaxonomy.knownSections[sphere.code], sections);
+    }
   });
 }

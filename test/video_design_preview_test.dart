@@ -55,28 +55,31 @@ void main() {
     await EasyLocalization.ensureInitialized();
   });
 
-  testWidgets('sphere changes reset the dependent section picker', (tester) async {
+  testWidgets('shared sections reset on sphere change; unpublished levels stay hidden', (tester) async {
     await mountPreview(tester);
+    expect(find.byKey(const ValueKey('video-level-A1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('video-level-A2')), findsNothing);
+    expect(find.byKey(const ValueKey('video-level-B2')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('video-section')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('video-section-option-farewell')));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.byKey(const ValueKey('video-sphere')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('video-sphere-option-professional')));
     await tester.pumpAndSettle();
+    expect(find.descendant(
+      of: find.byKey(const ValueKey('video-section')),
+      matching: find.text('Саламдашуу'),
+    ), findsOneWidget);
+
     await tester.tap(find.byKey(const ValueKey('video-section')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('video-section-option-greeting')), findsNothing);
-    expect(find.byKey(const ValueKey('video-section-option-workplace')), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('video-section-option-meeting')));
-    await tester.pumpAndSettle();
-    expect(find.text('Иш жолугушуусу: алгачкы кадам'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('video-level-B2')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('video-section')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('video-section-option-greeting')), findsNothing);
-    await tester.tap(find.byKey(const ValueKey('video-section-option-workplace')));
-    await tester.pumpAndSettle();
-    expect(find.text('Жумуш ордунда: алгачкы кадам'), findsOneWidget);
-    expect(find.textContaining('B2 ·'), findsOneWidget);
+    expect(find.byKey(const ValueKey('video-section-option-greeting')), findsOneWidget);
+    expect(find.byKey(const ValueKey('video-section-option-farewell')), findsOneWidget);
+    expect(find.byKey(const ValueKey('video-level-B2')), findsNothing);
     expect(tester.takeException(), isNull);
   }, skip: !DesignPreview.enabled);
 

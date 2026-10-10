@@ -135,6 +135,18 @@ exports.getVideoLessons = onCall(
     const config = videoConfig();
     await requirePremium(uid, config.revenueCat);
 
+    const availableSnapshot = await db
+      .collection("videos")
+      .where("isActive", "==", true)
+      .select("level")
+      .get();
+    const publishedLevels = new Set(
+      availableSnapshot.docs.map((document) => document.get("level"))
+    );
+    const availableLevels = [...VIDEO_LEVELS].filter((item) =>
+      publishedLevels.has(item)
+    );
+
     const snapshot = await db
       .collection("videos")
       .where("level", "==", level)
@@ -183,7 +195,7 @@ exports.getVideoLessons = onCall(
       return first.title.localeCompare(second.title);
     });
 
-    return { lessons, expiresIn: VIDEO_URL_TTL_SECONDS };
+    return { lessons, availableLevels, expiresIn: VIDEO_URL_TTL_SECONDS };
   }
 );
 
