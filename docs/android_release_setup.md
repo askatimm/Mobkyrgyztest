@@ -112,6 +112,11 @@ Google Play. Test Store ключ не должен попасть в магаз�
 flutter run --dart-define-from-file=config/test-store.json
 ```
 
+В VS Code выберите **Run and Debug → KyrgyzTest (Test Store)** и нажмите F5.
+Конфигурация в `.vscode/launch.json` передаст тот же файл через `toolArgs`.
+Обычный F5 с профилем `KyrgyzTest (default)` запускает приложение без Test
+Store; локальный `config/test-store.json` остаётся вне Git.
+
 Флаг `DESIGN_PREVIEW` здесь не нужен: этот режим отключает настоящие обращения
 к Firebase/RevenueCat. Войдите своим Firebase-аккаунтом, откройте Premium,
 проверьте успешную/отменённую/ошибочную покупку и восстановление. Для просмотра
