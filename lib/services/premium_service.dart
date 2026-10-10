@@ -126,6 +126,9 @@ class PremiumService {
   }
 
   static Future<bool> showPaywall() => _runBilling((uid) async {
+    // Test Store subscriptions can expire while the SDK still holds a cached
+    // active entitlement. Refresh before deciding to skip the purchase screen.
+    await Purchases.invalidateCustomerInfoCache();
     final existing = await Purchases.getCustomerInfo();
     if (existing.entitlements.active.containsKey(PremiumConfig.entitlementId)) {
       return existing;
