@@ -9,7 +9,9 @@ import '../home_screen.dart';
 import '../widgets/legal_policy_links.dart';
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key});
+  const RegisterScreen({super.key, this.returnToLoginOnSuccess = false});
+
+  final bool returnToLoginOnSuccess;
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -31,6 +33,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
     await prefs.setBool('login_seen', true);
 
     if (!mounted) return;
+
+    if (widget.returnToLoginOnSuccess) {
+      Navigator.of(context).pop(true);
+      return;
+    }
 
     Navigator.pushAndRemoveUntil(
       context,
