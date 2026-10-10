@@ -386,7 +386,7 @@ exports.checkEssay = onCall(
   {
     region: "us-central1",
     invoker: "public",
-    secrets: [VIDEO_ACCESS_CONFIG],
+    secrets: [VIDEO_ACCESS_CONFIG, "GEMINI_API_KEY", "OPENAI_API_KEY"],
   },
   async (request) => {
     logger.info("checkEssay START", {
