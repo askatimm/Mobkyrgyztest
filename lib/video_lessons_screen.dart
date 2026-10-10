@@ -22,7 +22,7 @@ class _VideoLessonsScreenState extends State<VideoLessonsScreen> {
   String _level = VideoTaxonomy.levels.first;
   String _sphere = VideoTaxonomy.spheres.first.code;
   String? _section;
-  late Future<List<VideoLesson>> _lessonsFuture;
+  late Future<VideoLessonCatalog> _lessonsFuture;
 
   @override
   void initState() {
@@ -31,10 +31,34 @@ class _VideoLessonsScreenState extends State<VideoLessonsScreen> {
   }
 
   void _loadLessons() {
-    _lessonsFuture = DesignPreview.enabled
-        ? Future.value(VideoPreviewCatalog.lessons(level: _level, sphere: _sphere))
-        : (_service ??= VideoLessonsService())
-            .fetchActiveLessons(level: _level, sphere: _sphere);
+    _lessonsFuture = _fetchLessons();
+  }
+
+  Future<VideoLessonCatalog> _fetchLessons() async {
+    if (DesignPreview.enabled) {
+      return VideoLessonCatalog(
+        lessons: VideoPreviewCatalog.lessons(level: 'A1', sphere: _sphere),
+        availableLevels: const ['A1'],
+      );
+    }
+    final selectedLevel = _level;
+    final selectedSphere = _sphere;
+    final service = _service ??= VideoLessonsService();
+    var catalog = await service.fetchActiveLessons(
+      level: selectedLevel, sphere: selectedSphere);
+    if (catalog.availableLevels.isNotEmpty &&
+        !catalog.availableLevels.contains(selectedLevel)) {
+      final nextLevel = catalog.availableLevels.first;
+      catalog = await service.fetchActiveLessons(
+        level: nextLevel, sphere: selectedSphere);
+      if (mounted && _level == selectedLevel && _sphere == selectedSphere) {
+        setState(() {
+          _level = nextLevel;
+          _section = null;
+        });
+      }
+    }
+    return catalog;
   }
 
   void _changeFilter({String? level, String? sphere}) {
@@ -99,11 +123,11 @@ class _VideoLessonsScreenState extends State<VideoLessonsScreen> {
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 760),
-          child: FutureBuilder<List<VideoLesson>>(
+          child: FutureBuilder<VideoLessonCatalog>(
             future: _lessonsFuture,
             builder: (context, snapshot) {
               final loading = snapshot.connectionState == ConnectionState.waiting;
-              final lessons = (snapshot.data ?? const <VideoLesson>[])
+              final lessons = (snapshot.data?.lessons ?? const <VideoLesson>[])
                   .where((item) => item.level == _level && item.sphere == _sphere)
                   .toList()
                 ..sort((a, b) {
@@ -148,7 +172,8 @@ class _VideoLessonsScreenState extends State<VideoLessonsScreen> {
                             const SizedBox(height: 16), const DesignPreviewNotice(),
                           ],
                           const SizedBox(height: 22),
-                          _buildFilters(sections, selected, language),
+                          _buildFilters(sections, selected, language,
+                              snapshot.data?.availableLevels ?? const <String>[]),
                           const SizedBox(height: 24),
                           Text(title, style: const TextStyle(fontSize: 22, height: 1.2,
                               fontWeight: FontWeight.w700, color: LearningColors.ink)),
@@ -213,17 +238,19 @@ class _VideoLessonsScreenState extends State<VideoLessonsScreen> {
     );
   }
 
-  Widget _buildFilters(List<VideoSectionOption> sections, String? selected, String language) {
+  Widget _buildFilters(List<VideoSectionOption> sections, String? selected,
+      String language, List<String> availableLevels) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22),
           border: Border.all(color: LearningColors.border)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (availableLevels.isNotEmpty) ...[
         Text('level'.tr(), style: const TextStyle(fontSize: 12,
             fontWeight: FontWeight.w600, color: LearningColors.muted)),
         const SizedBox(height: 10),
-        Row(children: [for (final level in VideoTaxonomy.levels) ...[
-          if (level != VideoTaxonomy.levels.first) const SizedBox(width: 6),
+        Row(children: [for (final level in availableLevels) ...[
+          if (level != availableLevels.first) const SizedBox(width: 6),
           Expanded(child: Semantics(
             selected: level == _level, button: true,
             label: 'levels.${level.toLowerCase()}'.tr(),
@@ -243,6 +270,7 @@ class _VideoLessonsScreenState extends State<VideoLessonsScreen> {
           )),
         ]]),
         const SizedBox(height: 16),
+        ],
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Expanded(child: _FilterPicker(fieldKey: 'video-sphere', label: 'video_sphere'.tr(),
             value: _sphere, icon: Icons.public_rounded,
