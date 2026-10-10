@@ -135,8 +135,10 @@ flutter run --dart-define-from-file=config/test-store.json
 `VIDEO_ACCESS_CONFIG` ИИ-проверка будет недоступна.
 
 Перед обновлением `checkEssay` перенесите действующие ключи провайдеров ИИ из
-переменных Cloud Run в Firebase Secret Manager. Проверьте наличие секретов
-`GEMINI_API_KEY` и `OPENAI_API_KEY` командой
+переменных Cloud Run в Firebase Secret Manager под **отдельными именами**,
+`ESSAY_GEMINI_API_KEY` и `ESSAY_OPENAI_API_KEY`. Имя секрета не должно совпадать
+с именем существующей обычной переменной Cloud Run: сервис отклонит такое
+обновление. Проверьте наличие секретов командой
 `firebase functions:secrets:get ИМЯ --project kyrgyztest-app` (команда показывает
 метаданные, а не значение). Для отсутствующего секрета выполните
 `firebase functions:secrets:set ИМЯ --project kyrgyztest-app` и введите его

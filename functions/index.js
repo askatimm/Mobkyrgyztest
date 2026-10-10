@@ -386,7 +386,7 @@ exports.checkEssay = onCall(
   {
     region: "us-central1",
     invoker: "public",
-    secrets: [VIDEO_ACCESS_CONFIG, "GEMINI_API_KEY", "OPENAI_API_KEY"],
+    secrets: [VIDEO_ACCESS_CONFIG, "ESSAY_GEMINI_API_KEY", "ESSAY_OPENAI_API_KEY"],
   },
   async (request) => {
     logger.info("checkEssay START", {
@@ -476,10 +476,10 @@ exports.checkEssay = onCall(
         topic,
       });
 
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = process.env.ESSAY_GEMINI_API_KEY;
 
       if (!apiKey) {
-        throw new HttpsError("internal", "Missing GEMINI_API_KEY");
+        throw new HttpsError("internal", "Missing ESSAY_GEMINI_API_KEY");
       }
 
       const usageRef = db
@@ -750,12 +750,12 @@ Essay:
       } catch (geminiError) {
         logger.error("Gemini failed, fallback to OpenAI", geminiError);
 
-        const openAiKey = process.env.OPENAI_API_KEY;
+        const openAiKey = process.env.ESSAY_OPENAI_API_KEY;
 
         if (!openAiKey) {
           throw new HttpsError(
             "unavailable",
-            "Missing OPENAI_API_KEY"
+            "Missing ESSAY_OPENAI_API_KEY"
           );
         }
 
