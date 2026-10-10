@@ -10,6 +10,7 @@ import 'services/video_lessons_service.dart';
 import 'video_player_screen.dart';
 import 'widgets/video_design.dart';
 import 'widgets/premium_feedback.dart';
+import 'services/premium_service.dart';
 
 class VideoLessonsScreen extends StatefulWidget {
   const VideoLessonsScreen({super.key});
@@ -22,6 +23,7 @@ class _VideoLessonsScreenState extends State<VideoLessonsScreen> {
   String _level = VideoTaxonomy.levels.first;
   String _sphere = VideoTaxonomy.spheres.first.code;
   String? _section;
+  bool _openingPaywall = false;
   late Future<VideoLessonCatalog> _lessonsFuture;
 
   @override
@@ -80,8 +82,24 @@ class _VideoLessonsScreenState extends State<VideoLessonsScreen> {
   }
 
   Future<void> _showPaywall() async {
-    await openPremiumPaywall(context);
-    if (mounted) await _refresh();
+    if (_openingPaywall) return;
+    setState(() => _openingPaywall = true);
+    try {
+      final active = await openPremiumPaywall(context, serverDenied: true);
+      if (!mounted) return;
+      await _refresh();
+      if (active) {
+        try {
+          await _lessonsFuture;
+        } on VideoPremiumRequiredException {
+          if (mounted) showPremiumError(context, const PremiumAccessMismatchException());
+        } catch (_) {
+          // The library displays its own network/retry error.
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _openingPaywall = false);
+    }
   }
 
   Future<void> _signIn() async {
@@ -200,7 +218,7 @@ class _VideoLessonsScreenState extends State<VideoLessonsScreen> {
                       SliverToBoxAdapter(child: _LibraryMessage(
                         icon: Icons.workspace_premium_rounded, title: 'video_premium_title'.tr(),
                         description: 'video_premium_required'.tr(), action: 'video_open_paywall'.tr(),
-                        onAction: _showPaywall, premium: true,
+                        onAction: _showPaywall, premium: true, busy: _openingPaywall,
                       ))
                     else if (snapshot.hasError)
                       SliverToBoxAdapter(child: _LibraryMessage(
@@ -479,13 +497,14 @@ class _CompactLesson extends StatelessWidget {
 
 class _LibraryMessage extends StatelessWidget {
   const _LibraryMessage({required this.icon, required this.title, required this.description,
-    this.action, this.onAction, this.premium = false});
+    this.action, this.onAction, this.premium = false, this.busy = false});
   final IconData icon;
   final String title;
   final String description;
   final String? action;
   final VoidCallback? onAction;
   final bool premium;
+  final bool busy;
   @override
   Widget build(BuildContext context) => Container(
     margin: const EdgeInsets.symmetric(horizontal: 20), padding: const EdgeInsets.all(28),
@@ -501,13 +520,16 @@ class _LibraryMessage extends StatelessWidget {
           color: premium ? const Color(0xFFCEDCED) : LearningColors.muted)),
       if (action != null && onAction != null) ...[
         const SizedBox(height: 24),
-        FilledButton(onPressed: onAction,
+        FilledButton(onPressed: busy ? null : onAction,
           style: FilledButton.styleFrom(
               backgroundColor: premium ? const Color(0xFFFFDDA5) : LearningColors.blue,
               foregroundColor: premium ? LearningColors.navy : Colors.white,
               minimumSize: const Size(double.infinity, 48),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13))),
-          child: Text(action!, style: const TextStyle(fontWeight: FontWeight.w700))),
+          child: busy
+              ? const SizedBox(width: 20, height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : Text(action!, style: const TextStyle(fontWeight: FontWeight.w700))),
       ],
     ]),
   );
