@@ -116,7 +116,7 @@ test("AI writing rejects a forged Premium flag before reading topics or charging
 test("AI writing binds the Premium and both provider secrets", () => {
   const app = handlers();
   const secrets = app.calls.options[2].secrets.map((secret) => secret.name || secret);
-  assert.deepEqual(Array.from(secrets), ["VIDEO_ACCESS_CONFIG", "GEMINI_API_KEY", "OPENAI_API_KEY"]);
+  assert.deepEqual(Array.from(secrets), ["VIDEO_ACCESS_CONFIG", "ESSAY_GEMINI_API_KEY", "ESSAY_OPENAI_API_KEY"]);
 });
 
 test("AI writing fails closed when RevenueCat cannot verify a subscription", async () => {
