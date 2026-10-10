@@ -55,8 +55,7 @@ class VideoTaxonomy {
     ),
   ];
 
-  static const Map<String, List<VideoSectionOption>> knownSections = {
-    'personal': [
+  static const List<VideoSectionOption> sharedSections = [
       VideoSectionOption(
         code: 'greeting',
         ky: 'Саламдашуу',
@@ -87,7 +86,13 @@ class VideoTaxonomy {
         ky: 'Таанышуу',
         ru: 'Знакомство',
       ),
-    ],
+  ];
+
+  static const Map<String, List<VideoSectionOption>> knownSections = {
+    'personal': sharedSections,
+    'professional': sharedSections,
+    'social_cultural': sharedSections,
+    'educational': sharedSections,
   };
 
   static VideoSphereOption sphere(String code) {
